@@ -80,7 +80,7 @@ function changeNamespace {
   if [ ${#checkRes} -eq 0 ] ; then return; fi
   case "$1" in
     'acl')
-      if [ ${prepareFile##*.} = 'yml' ] ; then
+      if [[ ${prepareFile##*.} = 'yml' || ${prepareFile##*.} = 'json' ]] ; then
         cat $prepareFile |
           sed -r "s|\"namespace\"\s*:\s*\"$nsPrev\"|\"namespace\": \"$nsNew\"|"  |
           sed -r "s|/$nsPrev@|/$nsNew@|" |

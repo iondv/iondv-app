@@ -191,7 +191,7 @@ function f_get_metadep_ver() {
     if ! [ ${#metadepAll[@]} = 0 ] ; then
       local rawMetaDepPairList=`echo $metadepAll | tr -d [:space:] | tr -d '"' | tr ',' '\n'`
       for temp in ${rawMetaDepPairList[@]}; do
-        if [[ `curl -L -s -k -w %{http_code} -o /dev/null $IONDVUrlGitExtApp/${temp%:*}.git` != '200' ]]; then # $IONDVUrlGitExtApp/
+        if [[ `curl -L -s -k -w %{http_code} -o /dev/null $IONDVUrlGitExtApp/${temp%:*}.git` != '200' ]]; then
           echo "Check extra app ${temp%:*}. $IONDVUrlGitExtApp/${temp%:*} is missing. Skip"
         else
           metaDepPairList=`echo -en "${metaDepPairList[@]}\n${temp}"`
@@ -233,6 +233,10 @@ function f_git_set_dockerfile() {
   local gitDockerVer=${1##*:}
   local destPath=$2
   if [ ${3##*.} = "git" ]; then local gitUrl=$3; else local gitUrl="$3/$gitDockerName.git"; fi
+  if [[ `curl -L -s -k -w %{http_code} -o /dev/null $gitUrl` != '200' ]]; then
+    echo "$gitUrl check error"
+    exit
+  fi
   if [ $4 ]; then local folderName=$4; else local folderName=$gitDockerName; fi
   if ! [ $quietMode ] ; then echo "Build git docker $gitDockerName:$gitDockerVer from $gitUrl"; fi
   if [ $dockerVersionSave ]; then
@@ -250,25 +254,34 @@ function f_git_set_dockerfile() {
   echo "COPY ./.dockerignore /var/www/.dockerignore"                                          >> "$frameworkPath/Dockerfile$postfix"
 
   if ! [ $skipTagMode ] && ! [ "$gitDockerVer"="latest" ] ; then
-  echo $gitDockerVer
-      echo "WORKDIR $destPath/$folderName"                                                    >> "$frameworkPath/Dockerfile$postfix"
-      echo "RUN git checkout \"tags/$gitDockerVer\""                                          >> "$frameworkPath/Dockerfile$postfix"
+    echo $gitDockerVer
+    echo "WORKDIR $destPath/$folderName"                                                    >> "$frameworkPath/Dockerfile$postfix"
+    echo "RUN git checkout \"tags/$gitDockerVer\""                                          >> "$frameworkPath/Dockerfile$postfix"
   fi
 }
 
 
 f_check_readiness_docker() {
-  docker images | grep "${1%:*}\s*${1##*:}"
+  echo "Check image $1: " && docker images | grep "${1%:*}\s*${1##*:}\s"
   return $?
 }
 
+#  f_buld_docker_version $1 - image Name; $2 - path to Dockerfile $3 - path to build; $4 - ignore current image
 function f_buld_docker_version() {
-  if [ -z $4 ] && f_check_readiness_docker "$1" ; then echo "Docker $1 is exist, skip building"; return;
+  f_check_readiness_docker "$1"
+  local check_res=$?
+  if ! [ -z $4 ] ; then
+    if [ $check_res -eq 0 ]; then echo -n "  Remove image:           ";  docker rmi $1; fi
+    docker image build -t "$1" -f "$2" "$3"
   else
+     if [ $check_res -eq 0 ]; then
+       echo "Docker $1 is exist, skip building"; return;
+     else
 # TODO Didn't cache param. Check?
 # --rm --compress --no-cache=true --pull --force-rm
 # RM .git?
-    docker image build -t "$1" -f "$2" "$3"
+        docker image build -t "$1" -f "$2" "$3"
+    fi
   fi
   # TODO GET VERSION AND COPY AND SET IN NEW ONE DOCKER - SMALLEST AND VERIFED VERSION
   # TODO check rezult version from package.json, after build docker (copy to host) and set it in new docker, when will build by copy from git vesion?
@@ -341,20 +354,31 @@ function f_build_docker() {
   f_git_set_dockerfile "$appName:$imageVersion" "/var/www/applications" $appGitLink
   if [ $newAppName ] ; then
     cp $scriptPath/change-namespace.sh $frameworkPath/change-namespace.sh
-    echo "COPY ./change-namespace.sh /var/www/applications/change-namespace.sh"               >> "$frameworkPath/Dockerfile-git-$appName"
-    echo "RUN sh /var/www/applications/change-namespace.sh $quietMode /var/www/applications/$appName $prevAppName $newAppName" \
-                                                                                              >> "$frameworkPath/Dockerfile-git-$appName"
-    echo "RUN rm -f /var/www/applications/change-namespace.sh"                                >> "$frameworkPath/Dockerfile-git-$appName"
+    if [ $dockerVersionSave ]; then # Собираем все в одном Dockerfile.
+      echo "COPY ./change-namespace.sh /var/www/applications/change-namespace.sh"               >> "$frameworkPath/Dockerfile-git-$appName"
+      echo "RUN sh /var/www/applications/change-namespace.sh $quietMode /var/www/applications/$appName $prevAppName $newAppName" \
+                                                                                                >> "$frameworkPath/Dockerfile-git-$appName"
+      echo "RUN rm -f /var/www/applications/change-namespace.sh"                                >> "$frameworkPath/Dockerfile-git-$appName"
+    else
+      echo "COPY ./change-namespace.sh /var/www/applications/change-namespace.sh"               >> "$frameworkPath/Dockerfile"
+      echo "RUN sh /var/www/applications/change-namespace.sh $quietMode /var/www/applications/$appName $prevAppName $newAppName" \
+                                                                                                >> "$frameworkPath/Dockerfile"
+      echo "RUN rm -f /var/www/applications/change-namespace.sh"                                >> "$frameworkPath/Dockerfile"
+    fi
   fi
-
-  f_buld_docker_version "iondv-git-$appName:$imageVersion" "$frameworkPath/Dockerfile-git-$appName" "$frameworkPath/."
+  if [ $imageVersion = 'latest' ];then forceBuildDocker = "--check-ignore"; else forceBuildDocker = ""; fi
+  if [ $dockerVersionSave ]; then # TODO  Проблема, что если версия закешировалась, например латест - то новое ничего не подтянет. Для latest принутидельно
+      f_buld_docker_version "iondv-git-$appName:$imageVersion" "$frameworkPath/Dockerfile-git-$appName" "$frameworkPath/." $forceBuildDocker
+    else
+      f_buld_docker_version "iondv-git-$appName:$imageVersion" "$frameworkPath/Dockerfile" "$frameworkPath/." $forceBuildDocker
+  fi
   f_save_package_to_host "iondv-git-$appName:$imageVersion" "/var/www/applications/$appName" "$frameworkPath/package-$appName.json"
 
   # Build framework docker image
   f_get_framework_ver $frameworkPath/package-$appName.json
-  if ! [ $frameworkVer ]; then frameworkVer="latest"; fi
+  if ! [ $frameworkVer ]; then frameworkVer="latest"; forceBuildDocker = "--check-ignore"; else forceBuildDocker = ""; fi
   f_git_set_dockerfile "framework:$frameworkVer" "/var" $IONDVUrlGitFramework "www"
-  if [ $dockerVersionSave ]; then f_buld_docker_version "iondv-git-framework:$frameworkVer" "$frameworkPath/Dockerfile-git-framework" "$frameworkPath/."; fi
+  if [ $dockerVersionSave ]; then f_buld_docker_version "iondv-git-framework:$frameworkVer" "$frameworkPath/Dockerfile-git-framework" "$frameworkPath/." $forceBuildDocker; fi
 
   # ionMetaDependencies
   f_get_metadep_ver $frameworkPath/package-$appName.json
@@ -440,7 +464,7 @@ function f_build_docker() {
     echo "RUN npm ci --only=production"                                                       >> "$frameworkPath/Dockerfile" # TODO NPM uninstall dev
     echo "COPY ./.dockerignore /var/www/.dockerignore"                                        >> "$frameworkPath/Dockerfile"
 
-    echo
+
     echo "FROM node:10 as iondv-$appName"                                                     >>  "$frameworkPath/Dockerfile"
 #    echo "FROM node:10-alpine"                                                                 >>  "$frameworkPath/Dockerfile"
 #    echo "RUN  apk add --no-cache make g++ \
@@ -593,8 +617,6 @@ function f_install_git () {
   npm ci --only=production
   echo "Test user. Login: demo, password: ion-demo"
   if [ $dockerUse ]; then
-#    if ! [ $appGetVersion ] ; then appGetVersion="latest"; fi
-#    imageName="iondv-$appName:$imageVersion"
     f_stop_docker
     f_dockerignore
     nodeVersion=`node --version | grep -Po "^v\d+" |  grep -Po "\d+"`
@@ -619,8 +641,6 @@ function f_install_git () {
 ##########################
 
 function f_stop_docker() {
-#  if ! [ $appGetVersion ] ; then appGetVersion="latest"; fi
-#  imageName="iondv-$appName:$appGetVersion"
   echo "Will be stop container and remove $dockerName, remove docker image: $imageName"
   echo "Also will be drop db: $dbName"
   if [ $yesToAll ] ; then
@@ -649,6 +669,8 @@ function f_stop_docker() {
 }
 
 function f_start_docker() {
+  docker ps | grep "0.0.0.0:8888->8888/tcp"
+  if [ $? -eq 0 ]; then echo "Port 8888 is busy, app won't have been started. Please exec: docker restart $dockerName"; fi
   if [ $mongoLink ] ; then
     if ! [ $quietMode ] ; then echo "Running docker container: $dockerName from $imageName, linked to $mongoLink"; fi
     docker run -d -p 8888:8888 --name $dockerName --link $mongoLink $imageName
@@ -680,9 +702,7 @@ function f_start_docker() {
 # Docker install function        #
 ##################################
 function f_install_docker() {
-#  imageName="iondv-$appName:$appGetVersion"
   echo "Create docker image: $imageName and run docker name:  $dockerName"
-  # TODO get imageVer and remove dockerImage after git clone app. Maybe check docker image:ver before remove?
   f_stop_docker
 
   if ! [ -d $frameworkPath ]; then mkdir $frameworkPath; fi
@@ -695,7 +715,6 @@ function f_install_docker() {
 # START SCRIPT                   #
 ##################################
 
-# Process param and path
 # Process param and path
 startDir=`pwd`
 scriptName=${0##*/}
@@ -756,16 +775,32 @@ if ! [ $IONDVUrlGitApp ] ; then IONDVUrlGitApp=https://github.com/iondv; fi
 if ! [ $IONDVUrlGitExtApp ] ; then IONDVUrlGitExtApp=https://github.com/iondv; fi
 
 
-checkUrl=`echo $appName  | grep "^http"`
-if [ $? -eq 0 ]; then
+
+if echo $appName | grep -Po "^http" > /dev/null ; then
   appGitLink=$appName
   appName=`echo $appName | grep -Po "[\-\w]+\.git" | sed 's/.git//'`
+elif echo $appName | grep -Po "^\/{1}|^\.{1,2}\/{1}" > /dev/null ; then
+  echo "Path $appName"
+  if echo $appName | grep -Po "\.zip\$" > /dev/null ; then
+    if ! [ -f $appName ]; then echo "Zip file with app don't found. Check path $appName"; fi
+    #appName= # TODO
+  else
+    echo "FOLDER $appName"
+     if ! [ -d $appName ]; then echo "Folder with app don't found. Check path $appName"; fi
+     #  appName = # TODO
+  fi
+
 elif [[ $appName =~ "@" ]] ; then
   appGetVersion=${appName##*@}
   appName=${appName%@*}
   appGitLink=$IONDVUrlGitApp/$appName.git
 else
   appGitLink=$IONDVUrlGitApp/$appName.git
+fi
+if [ $appGitLink ]; then
+  http_code=`curl -L -s -k -w %{http_code} -o /dev/null $appGitLink`
+  if [[ $http_code != '200' ]]; then echo "Check url $appGitLink is failed, code $http_code. Exit"; exit;
+  else echo "Source. Type Git. URL $appGitLink"; fi
 fi
 
 if [ $newAppName ] ; then
@@ -779,14 +814,15 @@ dbName=$appName
 dockerName="$appName"
 if [ $appGetVersion ] ; then imageVersion=$appGetVersion; else imageVersion="latest";  fi
 imageName="iondv-$appName:$imageVersion"
-
+echo "DEV STOP"
+exit #########################@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
 if ! [ $quietMode ] ; then
   echo -e "Build parameters$paramInfo";
   echo "  - framework URL: $IONDVUrlGitFramework"
   echo "  - module base URL: $IONDVUrlGitModules"
   echo "  - app base URL: $IONDVUrlGitApp"
   echo "  - extApp base URL: $IONDVUrlGitExtApp"
-  echo "  - app git link: $appGitLink"
+  if [ $appGitLink ]; then echo "  - app's source type: git"; echo "  - app git link: $appGitLink"; fi
   if [ $prevAppName ] ; then 
     echo "  - changed namespace: $prevAppName"
     echo "  - new app name and namespace: $appName"

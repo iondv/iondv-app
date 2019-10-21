@@ -283,9 +283,9 @@ function f_git_set_dockerfile() {
      fi
      echo "COPY ./$folderName-zip/$folderName/ $destPath/$folderName/"                                             >> "$frameworkPath/Dockerfile$postfix"
   elif [ -n "$folderPath" ]; then
-    mkdir
-     cp $folderPath $frameworkPath/$folderName
-     echo "COPY ./$folderName $destPath/$folderName/"                                            >> "$frameworkPath/Dockerfile$postfix"
+     mkdir "$frameworkPath/$folderName-folder/"
+     cp -r $folderPath $frameworkPath/$folderName-folder/$folderName
+     echo "COPY ./$folderName-folder/$folderName/ $destPath/$folderName/"                                            >> "$frameworkPath/Dockerfile$postfix"
   else
     echo -en "${i_err}Not found app source. Exit${i_end}"
     exit

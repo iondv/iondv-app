@@ -278,7 +278,7 @@ function f_git_set_dockerfile() {
      if [ -z $unzipName ]; then echo "$zipPath don't have a folder with name $folderName. Exit"; exit; fi
      echo "Unpack name $unzipName"
      if [ "$unzipName"!="$folderName" ]; then
-       echo -en "${i_warn}Folder $unzipName don't equal $folderName. May be include brach name? Rename to $folderName${i_end}"
+       echo -en "${i_warn}Folder $unzipName don't equal $folderName. May be include branch name? Rename to $folderName${i_end}"
        mv "$frameworkPath/$folderName-zip/$unzipName" "$frameworkPath/$folderName-zip/$folderName"
      fi
      echo "COPY ./$folderName-zip/$folderName/ $destPath/$folderName/"                                             >> "$frameworkPath/Dockerfile$postfix"
@@ -470,8 +470,7 @@ function f_build_docker() {
     fi
     echo "COPY ./init.sh /var/www/init.sh"                                                    >> "$frameworkPath/Dockerfile"
     echo "COPY ./setup.ini /var/www/config/setup.ini"                                         >> "$frameworkPath/Dockerfile"
-#    2del echo "WORKDIR /var/www/applications"                                                      >> "$frameworkPath/Dockerfile"
-#    2del echo "COPY --from=iondv-git-$appName:$imageVersion /var/www/applications ."              >> "$frameworkPath/Dockerfile"
+
     echo "COPY --from=iondv-git-$appName:$imageVersion /var/www/applications/ /var/www/applications/"              >> "$frameworkPath/Dockerfile"
     for temp in ${metaDepPairList[@]}; do
       if [ $dockerVersionSave ]; then
@@ -482,17 +481,14 @@ function f_build_docker() {
         echo "COPY --from=iondv-git-${temp%:*} /var/www/applications ./applications"                       >> "$frameworkPath/Dockerfile"
       fi
     done
-    # 2del echo "WORKDIR /var/www/modules"                                                           >> "$frameworkPath/Dockerfile"
+
     for temp in ${modulesDepPairList[@]}; do
       if [ $dockerVersionSave ]; then
-# 2del       echo "COPY --from=iondv-git-$temp /var/www/modules ."                                  >> "$frameworkPath/Dockerfile"
         echo "COPY --from=iondv-git-$temp /var/www/modules/ ./modules/"                                  >> "$frameworkPath/Dockerfile"
       else
-# 2del       echo "COPY --from=iondv-git-${temp%:*} /var/www/modules ."                            >> "$frameworkPath/Dockerfile"
         echo "COPY --from=iondv-git-${temp%:*} /var/www/modules/ ./modules/"                            >> "$frameworkPath/Dockerfile"
       fi
     done
-#    2del echo "WORKDIR /var/www"                                                                   >> "$frameworkPath/Dockerfile"
     if [ $postInstScript ] ; then
       cp $postInstScript $frameworkPath/${postInstScript##*/}
       echo "COPY ./${postInstScript##*/} /var/www/${postInstScript##*/}"                      >> "$frameworkPath/Dockerfile"
@@ -564,17 +560,43 @@ function f_install_git () {
     mkdir "$frameworkPath/applications"
   fi
 
-  if [ -d "$frameworkPath/applications/$appName" ]; then
-    appVer=`grep -E '\"version\"\s*:\s*\"' $frameworkPath/applications/$appName/package.json | grep -o -E '[0-9\.]+'`
-    git stash
-    git pull
-  else
-    cd "$frameworkPath/applications"
-    if ! [ $quietMode ] ; then echo "Git: clone IONDV. app - $appName from $appGitLink"; fi
-    git clone --quiet "$appGitLink" $appName
-    if [ $? -ne 0 ]; then echo -en "${i_err}Don't clone $appGitLink${i_end}"; exit; fi
-  fi
+#  if [ -d "$frameworkPath/applications/$appName" ]; then
+#    appVer=`grep -E '\"version\"\s*:\s*\"' $frameworkPath/applications/$appName/package.json | grep -o -E '[0-9\.]+'`
+#    git stash
+#    git pull
+#  else
+#    cd "$frameworkPath/applications"
+#    if ! [ $quietMode ] ; then echo "Git: clone IONDV. app - $appName from $appGitLink"; fi
+#    git clone --quiet "$appGitLink" $appName
+#    if [ $? -ne 0 ]; then echo -en "${i_err}Don't clone $appGitLink${i_end}"; exit; fi
+#  fi
 
+  if [ -n "$appGitLink" ]; then
+    if [ -d "$frameworkPath/applications/$appName" ]; then
+        appVer=`grep -E '\"version\"\s*:\s*\"' $frameworkPath/applications/$appName/package.json | grep -o -E '[0-9\.]+'`
+        git stash
+        git pull
+      else
+        cd "$frameworkPath/applications"
+        if ! [ $quietMode ] ; then echo "Git: clone IONDV. app - $appName from $appGitLink"; fi
+        git clone --quiet "$appGitLink" $appName
+        if [ $? -ne 0 ]; then echo -en "${i_err}Don't clone $appGitLink${i_end}"; exit; fi
+      fi
+  elif [ -n "$zipPath" ]; then
+     unzip -q $zipPath -d "$frameworkPath/applications/"
+     unzipName=`ls -1p $frameworkPath/applications | grep '/$' | sed 's/\/$//' | grep $appName` # If zip from github - it have branch on folder name
+     if [ -z $unzipName ]; then echo "$zipPath don't have a folder with name $appName. Exit"; exit; fi
+     echo "Unpack name $unzipName"
+     if [ "$unzipName" != "$appName" ]; then
+       echo -en "${i_warn}Folder $unzipName don't equal $appName. May be include branch name? Rename to $appName${i_end}"
+       mv "$frameworkPath/applications/$unzipName" "$frameworkPath/applications/$appName"
+     fi
+  elif [ -n "$folderPath" ]; then
+     cp -r $folderPath "$frameworkPath/applications/$appName"
+  else
+    echo -en "${i_err}Not found app source. Exit${i_end}"
+    exit
+  fi
 
   if [ $appGetVersion ] ; then
     git checkout "tags/$appGetVersion"

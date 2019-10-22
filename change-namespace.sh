@@ -80,7 +80,7 @@ function changeNamespace {
   if [ ${#checkRes} -eq 0 ] ; then return; fi
   case "$1" in
     'acl')
-      if [ ${prepareFile##*.} = 'yml' ] ; then
+      if [[ ${prepareFile##*.} = 'yml' || ${prepareFile##*.} = 'json' ]] ; then
         cat $prepareFile |
           sed -r "s|\"namespace\"\s*:\s*\"$nsPrev\"|\"namespace\": \"$nsNew\"|"  |
           sed -r "s|/$nsPrev@|/$nsNew@|" |
@@ -106,6 +106,18 @@ function changeNamespace {
         local prepared=1
       fi
       ;;
+    'dashboard')
+      if [ ${prepareFile##*.} = 'ejs' ] ; then
+        cat $prepareFile |
+          sed -r "s|registry/$nsPrev@|registry/$nsNew@|" |
+          sed -r "/registry\/api/{s/@$nsPrev/@$nsNew/;}" |
+          sed -r "/dashboard\.getWidget/{s/'$nsPrev/'$nsNew/;}" |                 #  dashboard.getWidget('test-pm-task')
+          sed -r "/node:/{s/$nsPrev@/$nsNew@/;}" |
+          sed -r "s|dashboard/$nsPrev|dashboard/$nsNew|" > "$prepareFile-$curDate"
+        local prepared=1
+      fi
+      ;;
+
     'geo')
       if echo $prepareFile | grep -Eq "/geo/layers/"; then
         if [ ${prepareFile##*.} = 'json' ] ; then
@@ -152,19 +164,22 @@ function changeNamespace {
       fi
       ;;
     'templates')
-      if [ ${prepareFile##*.} = 'ejs' ] ; then 
+      if [ ${prepareFile##*.} = 'ejs' ] ; then
         cat $prepareFile |
           sed -r "s|geomap/render/$nsPrev|geomap/render/$nsNew|" |
           sed -r "s|/report/public/$nsPrev@|/report/public/$nsNew@|" |
+          sed -r "s|$nsPrev([\/\\])templates|$nsNew\1templates|" |                      # test-pm\templates   # TODO (!) ПУСТЫЕ ФАЙЛЫ
           sed -r "s|report/$nsPrev@|report/$nsNew@|" |
           sed -r "s|registry/$nsPrev@|/registry/$nsNew@|" |
           sed -r "s|@$nsPrev/|@$nsNew/|" |
-          sed -r "s|@$nsPrev'|@$nsNew'|" | sed -r "s|@$nsPrev\`|@$nsNew\`|" | sed -r "s|'$nsPrev@|'$nsNew@|" > "$prepareFile-$curDate"
+          sed -r "s|@$nsPrev'|@$nsNew'|" |
+          sed -r "s|@$nsPrev\`|@$nsNew\`|" |
+          sed -r "s|'$nsPrev@|'$nsNew@|" > "$prepareFile-$curDate"
         local prepared=1
       fi
       ;;
     'themes')
-      if [ ${prepareFile##*.} = 'js' ] ; then #  /workspace/pm-gov-ru-ns/themes/portal/static/js/monitor.js
+      if [ ${prepareFile##*.} = 'js' ] ; then
         cat $prepareFile |
           sed -r "s|report/$nsPrev@|report/$nsNew@|" |
           sed -r "s|@$nsPrev'|@$nsNew'|" |
@@ -194,15 +209,13 @@ function changeNamespace {
         cat $prepareFile |
           sed -r "s|\"applications/$nsPrev/|\"applications/$nsNew/|" |
           sed -r "s|\"namespace\"\s*:\s*\"$nsPrev\"|\"namespace\": \"$nsNew\"|" > "$prepareFile-$curDate"
-#            sed -r "s|\"$nsPrev\"\s*:\s*\"|\"$nsNew\": \"|" | \
-#            sed -r "s|\"$nsPrev\"\s*:\s*\{|\"$nsNew\": \{|" | \
-#            sed -r "s|@$nsPrev\"|@$nsNew\"|" | \
-#            sed -r "s|\"$nsPrev@|\"$nsNew@|"
       local prepared=1
       elif [ ${prepareFile##*.} = 'js' ] ; then
         echo -en "${i_warn}Folder \"$1\" didn't have instruction to prepare. Use default check and replace for $prepareFile${i_end}";
         cat $prepareFile |
-          sed -r "s|@$nsPrev'/|@$nsNew'/|" | sed -r "s|@$nsPrev.|@$nsNew.|" | sed -r "s|@$nsPrev'|@$nsNew'|" > "$prepareFile-$curDate"
+          sed -r "s|(['\"])([a-zA-Z0-9_]+)@$nsPrev(['\"])|\1\2@$nsNew\3|" |  # 'eventControl@test-pm'
+          sed -r "s|(['\"])([a-zA-Z0-9_]+)@$nsPrev([\.a-zA-Z0-9_]+)(['\"])|\1\2@$nsNew\3\4|" |   # 'project@test-pm.inaccepted' 'indicatorBasic@test-pm.'
+          sed -r "s|@$nsPrev'|@$nsNew'|" > "$prepareFile-$curDate"
         local prepared=1
       else
         echo -en "${i_warn}Folder \"$1\" didn't have instruction to prepare and didn't recognize extension for use default check and replace for $prepareFile. Skip${i_end}";
@@ -324,17 +337,23 @@ if [ -f "$appPath/package.json" ] ; then
 fi
 
 if [ -f "$appPath/deploy.json" ] ; then
-  if ! [ $quietMode ] ; then echo "Process deploy.json"; fi  
+  if ! [ $quietMode ] ; then echo "Process deploy.json"; fi
   cat $appPath/deploy.json | \
     sed -r "s|\"applications/$nsPrev/|\"applications/$nsNew/|" |
     sed -r "s|\"namespace\"\s*:\s*\"$nsPrev\"|\"namespace\": \"$nsNew\"|" |
-    sed -r "s|\"$nsPrev\"\s*:\s*\"|\"$nsNew\": \"|" |
-    sed -r "s|\"$nsPrev\"\s*:\s*\{|\"$nsNew\": \{|" |
-    sed -r "s|@$nsPrev\"|@$nsNew\"|" |
-    sed -r "s|\"$nsPrev@|\"$nsNew@|" |
-    sed -r "s|/$nsPrev@|/$nsNew@|" |
-    sed -r "s|@$nsPrev.|@$nsNew.|" |
-    sed -r "s|@$nsPrev:|@$nsNew:|" |
+    sed -r "/\"url\"\s*:\s*\"/{s/registry\/$nsPrev@/registry\/$nsNew@/;}" |
+    sed -r "/\"className\"\s*:/{s/\"(\w+)@$nsPrev\"/\"\1@$nsNew\"/;}" |            # "className": "project@test-pm"
+    sed -r "/\"node\"\s*:/{s/\"$nsPrev@(\w+)\"/\"$nsNew@\1\"/;}" |                 # "node": "test-pm@eventBasic"
+    sed -r "s|\"([\.a-zA-Z0-9_]+)@$nsPrev\"\s*:\s*\{|\"\1@$nsNew\": \{|" |        # "person@test-pm": {
+    sed -r "s|/registry/$nsPrev@([\.a-zA-Z0-9_]+)\"|/registry/$nsNew@\1\"|" |     # "^/registry/test-pm@indicatorValue.all",
+    sed -r "s|(\"\w+)@$nsPrev([\.:a-zA-Z0-9_]+)\"\s*:\s*\{|\1@$nsNew\2\": \{|" |  # "project@test-pm.edit": {   # "eventBasic@test-pm:mapAIP": {
+    sed -r "s|\"$nsPrev\"\s*:\s*\{|\"$nsNew\": \{|" |                              # "test-pm": {
+    sed -r "s|\"$nsPrev\"\s*:\s*\"|\"$nsNew\": \"|" |                              # "test-pm": "Project management"
+    sed -r "s|\"([a-zA-Z0-9_]+)@$nsPrev([\.a-zA-Z0-9_]+)\"|\"\1@$nsNew\2\"|" |   # "resultEvent@test-pm.work"
+    sed -r "s|\"registry/$nsPrev@([\.a-zA-Z0-9_]+)/|\"registry/$nsNew@\1/|" |       # "registry/test-pm@myprojectevent.all/new/
+    sed -r "s|/([a-zA-Z0-9_]+)/([a-zA-Z0-9_]+)@$nsPrev\"|/\1/\2@$nsNew\"|"  |    # /basicObjs/event@test-pm"
+        sed -r "s|\"([a-zA-Z0-9_]+)@$nsPrev\"|\"\1@$nsNew\"|g" |                  # "indicatorValueBasic@test-pm"
+    sed -r "s|\"$nsPrev@([\.a-zA-Z0-9_]+)\"|\"$nsNew@\1\"|g" |                    # "test-pm@projectmanagement"
     sed -r "s|\"theme\"\s*:\s*\"$nsPrev/|\"theme\": \"$nsNew/|" > $appPath/deploy_temp_$curDate.json
 
   mv -f $appPath/deploy_temp_$curDate.json $appPath/deploy.json

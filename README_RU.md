@@ -120,11 +120,35 @@ iondv-app [OPTION]... IONDV_APP_NAME|IONDV_APP_NAME@VERSION|GIT_URL|IONDV_APP_ZI
 
 * Установка последней версии docker для CentOS:
 ```
-sudo yum -y install docker-ce docker-ce-cli containerd.io
+# Обновляем систему
+sudo yum update
+
+# Устанавливаем необходимые библиотеки 
+yum install -y yum-utils device-mapper-persistent-data lvm2
+#Регистрируем  репозиторий 
+yum-config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo
+# Установка последней версии 
+yum -y install docker-ce docker-ce-cli containerd.io
+#Запускаем докер
+systemctl start docker
+#Для автоматического запуска докера 
+systemctl enable docker
 ```
 
 * Установка последней версии docker для Ubuntu:
 ```
+# Добавляем ключ GDP
+curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -
+# Проверяем ключ
+apt-key fingerprint 0EBFCD88
+# Добавляем репозиторий
+sudo add-apt-repository \
+   "deb [arch=amd64] https://download.docker.com/linux/ubuntu \
+   $(lsb_release -cs) \
+   stable"
+# Обновляем репозитории
+sudo apt-get update
+# Ставим последнюю версию
 sudo apt-get install docker-ce docker-ce-cli containerd.io
 ```
 
@@ -149,4 +173,4 @@ docker run --name mongodb -v mongodb_data:/data/db -p 27017:27017 -d mongo
 docker pull node:10
 ```
 
-Проверить можно командой `docker images | grep node` - будет отображён списком локальных образов node
+Проверить можно командой `docker images | grep node` - будет отображён спискок локальных образов node

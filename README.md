@@ -4,7 +4,7 @@
 IONDV. Framework application installer from the code repository.
 
 It installs, build and run the app from the git repository, from the zip archive (including downloaded from the visual constructor
-[IONDV. Studio] (https://studio.iondv.com)) or from a folder with application files (the folder is copied, the files in the folder do not change).
+[IONDV. Studio](https://studio.iondv.com)) or from a folder with application files (the folder is copied, the files in the folder do not change).
 
 ### Environment requirements
 By default, the build method in the docker container is used. Description of system preparation is given below in the 
@@ -118,13 +118,39 @@ It is recommended not to do under root.
 
 * Install latest version of docker for CentOS:
 ```
-sudo yum -y install docker-ce docker-ce-cli containerd.io
+# Update the system
+sudo yum update
+
+# Install the necessary libraries 
+yum install -y yum-utils device-mapper-persistent-data lvm2
+# Register a repository
+yum-config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo
+# Install the latest version
+yum -y install docker-ce docker-ce-cli containerd.io
+# Run docker
+systemctl start docker
+# Automatically launch docker 
+systemctl enable docker
 ```
 
 * Install latest version of for Ubuntu:
+
 ```
+# Add the GDP key
+curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -
+# Check the key
+apt-key fingerprint 0EBFCD88
+# Add the repository
+sudo add-apt-repository \
+   "deb [arch=amd64] https://download.docker.com/linux/ubuntu \
+   $(lsb_release -cs) \
+   stable"
+# Update the repository
+sudo apt-get update
+# Install the latest version
 sudo apt-get install docker-ce docker-ce-cli containerd.io
 ```
+
 
 Add the current user to the docker group:
 ```

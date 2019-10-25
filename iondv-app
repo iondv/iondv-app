@@ -275,8 +275,8 @@ function f_git_set_dockerfile() {
      unzip -q $zipPath -d "$frameworkPath/$folderName-zip/"
      unzipName=`ls -1p $frameworkPath/$folderName-zip | grep '/$' | sed 's/\/$//' | grep  $folderName` # If zip from github - it have branch on folder name
      if [ -z $unzipName ]; then echo "$zipPath don't have a folder with name $folderName. Exit"; exit; fi
-     echo "Unpack name $unzipName"
-     if [ "$unzipName"!="$folderName" ]; then
+     echo "Unpack name $unzipName, app name: $folderName"
+     if [ "$unzipName" != "$folderName" ]; then
        echo -en "${i_warn}Folder $unzipName not equal to $folderName. Include branch name? Rename to $folderName${i_end}"
        mv "$frameworkPath/$folderName-zip/$unzipName" "$frameworkPath/$folderName-zip/$folderName"
      fi
@@ -586,7 +586,7 @@ function f_install_git () {
      unzip -q $zipPath -d "$frameworkPath/applications/"
      unzipName=`ls -1p $frameworkPath/applications | grep '/$' | sed 's/\/$//' | grep $appName` # If zip from github - it have branch on folder name
      if [ -z $unzipName ]; then echo "$zipPath no folder with this name - $appName. Exit"; exit; fi
-     echo "Unpack name $unzipName"
+     echo "Unpack name $unzipName, appName: $appName"
      if [ "$unzipName" != "$appName" ]; then
        echo -en "${i_warn}Folder $unzipName not equal to $appName. Include branch name? Rename to $appName${i_end}"
        mv "$frameworkPath/applications/$unzipName" "$frameworkPath/applications/$appName"

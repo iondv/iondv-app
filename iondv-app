@@ -249,11 +249,10 @@ function f_git_set_dockerfile() {
       echo "$gitUrl check error"
       exit
     fi
-    if ! [ $quietMode ] ; then echo "Build git docker $gitDockerName:$gitDockerVer from $gitUrl"; fi
+    if ! [ $quietMode ] ; then echo "Build git dockerfile $gitDockerName:$gitDockerVer from $gitUrl"; fi
   fi
 
-#  2del if [ $4 ]; then local folderName=$4; else local folderName=$gitDockerName; fi
-  if [ "$2" != "/var" ]; then
+  if [ "$2" != "/var" ]; then # Для провки что не фреймворк, для фреймворка подменяем на www
     local folderName=$gitDockerName;
   else
     local folderName='www';
@@ -409,9 +408,10 @@ function f_build_docker() {
     fi
   fi
   if [ $imageVersion = 'latest' ];then forceBuildDocker="--check-ignore"; else forceBuildDocker=""; fi
+
   if [ $dockerVersionSave ]; then # TODO  The problem is that if the version is cached, for example, latest, then the new one will not pull anything up. For latest forcibly
       f_buld_docker_version "iondv-git-$appName:$imageVersion" "$frameworkPath/Dockerfile-git-$appName" "$frameworkPath/." $forceBuildDocker
-    elsedocker run
+  else
       f_buld_docker_version "iondv-git-$appName:$imageVersion" "$frameworkPath/Dockerfile" "$frameworkPath/." $forceBuildDocker
   fi
   f_save_package_to_host "iondv-git-$appName:$imageVersion" "/var/www/applications/$appName" "$frameworkPath/package-$appName.json"

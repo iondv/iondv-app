@@ -17,13 +17,13 @@ source $scriptPath/color.cfg
 
 if ! [ $1 ] ; then
   echo 'Usage: iondv-app [OPTION]... IONDV_APP_NAME|IONDV_APP_NAME@VERSION|GIT_URL'
-  echo 'Install IONDV. Framework application to current dirrectory and create docker image.'
+  echo 'Install IONDV. Framework application in the current dirrectory and create docker image.'
   echo
   echo 'Options:'
   echo 'Build app method options:'
   echo ' -t [value]                   git: use git clone '
 #  echo '                              npm: get from npm [in construction]'
-  echo '                              docker:  without specific software on host mashine, only docker image (by default)'
+  echo '                              docker:  without specific software in host machine, only docker image (by default)'
   echo  'Universal options'
   echo '  -c [value]                  start cluster with [value] count'
   echo '  -m [value]                  mongo uri, for example: mongodb:27017. localhost:27017 - by default'
@@ -44,12 +44,12 @@ if ! [ $1 ] ; then
   echo '                              build for local deploy (git build method)'
   echo '  -k                          skip environment check'
   echo 'Options for docker method (ci):'
-  echo '  -v                          save provisional docker image as a template version, for example registry:3.0.0'
+  echo '  -v                          save temporal docker image as a template version, for example registry:3.0.0'
   echo '                              (to create cached version of components'
   echo
   echo 'Environment:'
   echo '  IONDVUrlGitFramework       URL to get framework by default is https://github.com/iondv/framework.git'
-  echo '                             You can also set login and password to use in private repositry, for example'
+  echo '                             You can also set login and password to use it in private repositry, for example'
   echo '                             https://login:password@git.company-name.com/iondv/framework.git'
   echo '  IONDVUrlGitModules         Base of URL to get modules, by default https://github.com/iondv'
   echo '  IONDVUrlGitApp             Base of URL to get app, by default https://github.com/iondv'
@@ -94,7 +94,7 @@ function f_check_bash() {
       exit
       fi
   else
-    echo "Bash version isn't checked. Need 3 or hignter"
+    echo "Bash version isn't checked. Need 3 or higher"
   fi
 }
 
@@ -277,7 +277,7 @@ function f_git_set_dockerfile() {
      if [ -z $unzipName ]; then echo "$zipPath don't have a folder with name $folderName. Exit"; exit; fi
      echo "Unpack name $unzipName"
      if [ "$unzipName"!="$folderName" ]; then
-       echo -en "${i_warn}Folder $unzipName don't equal $folderName. May be include branch name? Rename to $folderName${i_end}"
+       echo -en "${i_warn}Folder $unzipName not equal to $folderName. Include branch name? Rename to $folderName${i_end}"
        mv "$frameworkPath/$folderName-zip/$unzipName" "$frameworkPath/$folderName-zip/$folderName"
      fi
      echo "COPY ./$folderName-zip/$folderName/ $destPath/$folderName/"                                             >> "$frameworkPath/Dockerfile$postfix"
@@ -319,7 +319,7 @@ function f_buld_docker_version() {
 # --rm --compress --no-cache=true --pull --force-rm
 # RM .git?
         docker image build -t "$1" -f "$2" "$3"
-        if [ $? -ne 0 ]; then echo -en "${i_err}Error when buil docker image $1.  Exit ${i_end}"; exit; fi
+        if [ $? -ne 0 ]; then echo -en "${i_err}Error when build docker image $1.  Exit ${i_end}"; exit; fi
     fi
   fi
   # TODO GET VERSION AND COPY AND SET IN NEW ONE DOCKER - SMALLEST AND VERIFED VERSION
@@ -390,12 +390,12 @@ function  f_dockerignore() {
 
 
 function f_build_docker() {
-  # Создаем докер файл ROM alpine/git as iondv-develop-and-test с папкой приложения
+  # Create a docker ROM alpine/git file as iondv-develop-and-test with the application folder
   f_git_set_dockerfile "$appName:$imageVersion" "/var/www/applications" $appGitLink
 
   if [ $newAppName ] ; then
     cp $scriptPath/change-namespace.sh $frameworkPath/change-namespace.sh
-    if [ $dockerVersionSave ]; then # Собираем все в одном Dockerfile.
+    if [ $dockerVersionSave ]; then # Assembly it all in one Dockerfile.
       echo "COPY ./change-namespace.sh /var/www/applications/change-namespace.sh"               >> "$frameworkPath/Dockerfile-git-$appName"
       echo "RUN sh /var/www/applications/change-namespace.sh $quietMode /var/www/applications/$appName $prevAppName $newAppName" \
                                                                                                 >> "$frameworkPath/Dockerfile-git-$appName"
@@ -408,7 +408,8 @@ function f_build_docker() {
     fi
   fi
   if [ $imageVersion = 'latest' ];then forceBuildDocker="--check-ignore"; else forceBuildDocker=""; fi
-  if [ $dockerVersionSave ]; then # TODO  Проблема, что если версия закешировалась, например латест - то новое ничего не подтянет. Для latest принудительно
+
+  if [ $dockerVersionSave ]; then # TODO  The problem is that if the version is cached, for example, latest, then the new one will not pull anything up. For latest forcibly
       f_buld_docker_version "iondv-git-$appName:$imageVersion" "$frameworkPath/Dockerfile-git-$appName" "$frameworkPath/." $forceBuildDocker
   else
       f_buld_docker_version "iondv-git-$appName:$imageVersion" "$frameworkPath/Dockerfile" "$frameworkPath/." $forceBuildDocker
@@ -438,7 +439,7 @@ function f_build_docker() {
   f_create_setup_ini
   f_create_init_sh
 
-  if ! f_check_readiness_docker "$imageName"; then # TODO проверить - так как перетирает файл
+  if ! f_check_readiness_docker "$imageName"; then # TODO check - since it is erase files
     if [ $dockerVersionSave ]; then
       echo "FROM node:10 as iondv-base-$appName"                                                >  "$frameworkPath/Dockerfile"
     else
@@ -491,23 +492,23 @@ function f_build_docker() {
     if [ $postInstScript ] ; then
       cp $postInstScript $frameworkPath/${postInstScript##*/}
       echo "COPY ./${postInstScript##*/} /var/www/${postInstScript##*/}"                      >> "$frameworkPath/Dockerfile"
-      ### TODO If sript start other script? AND OTHER FILE???? ШАРИТЬ ПАПКУ www в текущую и в неё все копировать, в ней локально запустить? Или предварительно все файлы из контейнров собрать локально а потом после утилиты копировать в докер???
-      # TODO Альтернатива - копировать все файлы в контейнер.
+      ### TODO If script start other script? AND OTHER FILE ???? SHARING FOLDER www into the current one and copy everything into it and run locally in it? Or first collect all files from containers locally and then after utility, copy to docker ???
+       # TODO Alternative - copy all files to a container.
       echo "RUN sh /var/www/${postInstScript##*/} && rm -f /var/www/${postInstScript##*/}"                                            >> "$frameworkPath/Dockerfile" # TODO bash?
       # 2del echo "RUN rm -f /var/www/${postInstScript##*/}"                                         >> "$frameworkPath/Dockerfile"
     fi
     #echo "LABEL new=1"                                                                        >> "$frameworkPath/Dockerfile"
     echo "ENV NODE_PATH /var/www"                                                             >> "$frameworkPath/Dockerfile"
     echo "RUN npm install -g node-gyp gulp bower"                                             >> "$frameworkPath/Dockerfile"
-    #TODO dev только? Т.к. иначе размер докера 2.6 гб после удаления node-modules??? или как уменьшить? не кешировать при создании докер-контейнреа????
+    ### TODO dev only? Because otherwise the docker size is 2.6 gb after removing node-modules ??? or how to reduce? Do not cache when creating docker container ????
     echo "RUN npm install"                                                                    >> "$frameworkPath/Dockerfile" # TODO NPM install gulp
     echo "RUN gulp build"                                                                     >> "$frameworkPath/Dockerfile" # TODO удалить gulp & all devDependences
     # 2del echo "RUN rm -r -f ./node_modules"                                                        >> "$frameworkPath/Dockerfile"
     # 2del echo "RUN npm ci --only=production"                                                       >> "$frameworkPath/Dockerfile" # TODO NPM uninstall dev
     echo "COPY ./.dockerignore /var/www/.dockerignore"                                        >> "$frameworkPath/Dockerfile"
 
-## TODO МОЖЕТ ВООБЩЕ НЕ НУЖНА ЭТА ЧАСТЬ? Т.К ПО СУТИ ВСЕ ГОТОВ В ДЕВЕЛОП - ТАМ РАЗМЕР БОЛЬШОЙ, НО НЕТ ЛИШНЕЙ ОПЕРАЦИИ, СКОЛЬКО ОНА ЗАНИМАЕТ ПО ВРЕМЕНИ?
-## TODO ЛУЧШЕ САМИ МОДУЛИ СОБИРАТЬ ПРЯМОВ В GIT КОНЕЙНЕРАХ ДОКЕРОВ - и потом их только копировать.
+## TODO DO NOT NEED THIS PART? BECAUSE EVERYTHING IS READY FOR DEVELOPMENT - THERE IS A BIG SIZE, BUT THERE IS NO EXTRA OPERATION, HOW LONG DOES IT TAKE?
+## TODO IT IS BETTER FOR THE MODULES TO COLLECT DIRECTLY IN THE GIT CONTAINERS OF DOCKERS - and then only copy them.
     echo "FROM node:10 as iondv-$appName"                                                     >>  "$frameworkPath/Dockerfile"
 #    echo "FROM node:10-alpine"                                                                 >>  "$frameworkPath/Dockerfile"
 #    echo "RUN  apk add --no-cache make g++ \
@@ -584,16 +585,16 @@ function f_install_git () {
   elif [ -n "$zipPath" ]; then
      unzip -q $zipPath -d "$frameworkPath/applications/"
      unzipName=`ls -1p $frameworkPath/applications | grep '/$' | sed 's/\/$//' | grep $appName` # If zip from github - it have branch on folder name
-     if [ -z $unzipName ]; then echo "$zipPath don't have a folder with name $appName. Exit"; exit; fi
+     if [ -z $unzipName ]; then echo "$zipPath no folder with this name - $appName. Exit"; exit; fi
      echo "Unpack name $unzipName"
      if [ "$unzipName" != "$appName" ]; then
-       echo -en "${i_warn}Folder $unzipName don't equal $appName. May be include branch name? Rename to $appName${i_end}"
+       echo -en "${i_warn}Folder $unzipName not equal to $appName. Include branch name? Rename to $appName${i_end}"
        mv "$frameworkPath/applications/$unzipName" "$frameworkPath/applications/$appName"
      fi
   elif [ -n "$folderPath" ]; then
      cp -r $folderPath "$frameworkPath/applications/$appName"
   else
-    echo -en "${i_err}Not found app source. Exit${i_end}"
+    echo -en "${i_err} App source is not found. Exit${i_end}"
     exit
   fi
 
@@ -601,7 +602,7 @@ function f_install_git () {
     git checkout "tags/$appGetVersion"
     appVer=`grep -E '\"version\"\s*:\s*\"' $frameworkPath/applications/$appName/package.json | grep -o -E '[0-9\.]+'`
     if [[ $appGetVersion != $appVer ]] ; then
-      echo -en "${i_warn}App version is different. Required is $appGetVersion, current is $appVer.${i_end}"
+      echo -en "${i_warn}App version is not valid. Required is $appGetVersion, current is $appVer.${i_end}"
       exit
     fi
   else
@@ -710,8 +711,8 @@ function f_install_git () {
 ##########################
 
 function f_stop_docker() {
-  echo -en "${i_warn}Will be stop container and remove $dockerName, remove docker image: $imageName${i_end}"
-  echo -en "${i_warn}Also will be drop db: $dbName${i_end}"
+  echo -en "${i_warn}Will stop container and remove $dockerName, remove docker image: $imageName${i_end}"
+  echo -en "${i_warn}And it will drop db: $dbName${i_end}"
   if [ $yesToAll ] ; then
     choice="y"
   else
@@ -724,11 +725,11 @@ function f_stop_docker() {
         echo -n "  Remove container:         ";  docker rm $dockerName
       elif docker ps -a | grep -o $dockerName ; then
         echo -n "  Remove container:         ";  docker rm $dockerName
-      else echo "  There isn't container $dockerName to stop";
+      else echo "  There is no container $dockerName to stop";
       fi
       if docker image list | grep -o ${imageName%%:*} ; then
         echo -n "  Remove image:           ";  docker rmi $imageName
-      else echo "  There isn't image $imageName to remove";
+      else echo "  There is no image $imageName to remove";
       fi
       echo -n "  Remove db: $dbName "; docker exec -it $mongoLink mongo $dbName --quiet --eval "db.dropDatabase();";;
 
@@ -739,11 +740,11 @@ function f_stop_docker() {
 
 function f_start_docker() {
   docker ps | grep "0.0.0.0:8888->8888/tcp"
-  if [ $? -eq 0 ]; then echo -en "${i_warn}Port 8888 is busy, app won't have been started. Please exec: docker restart $dockerName${i_end}"; fi
+  if [ $? -eq 0 ]; then echo -en "${i_warn}Port 8888 is busy, app won't start. Please exec: docker restart $dockerName${i_end}"; fi
   if [ $mongoLink ] ; then
     if ! [ $quietMode ] ; then echo "Running docker container: $dockerName from $imageName, linked to $mongoLink"; fi
     docker run -d -p 8888:8888 --name $dockerName --link $mongoLink $imageName
-  else   # TODO для докера нужен какой-то проброс портов на host. И параметр - запускать или нет.
+  else   # TODO docker needs some kind of port forwarding on host. And the parameter - run or not.
     if ! [ $quietMode ] ; then echo "Running docker container: $dockerName from $imageName"; fi
     docker run -d -p 8888:8888 --name $dockerName $imageName
   fi
@@ -789,7 +790,7 @@ function f_install_docker() {
 while [ -n "$1" ]
 do
 case "$1" in
-  -d) dockerUse=1; paramInfo="$paramInfo\n  - found the build docker option";;
+  -d) dockerUse=1; paramInfo="$paramInfo\n  - found the docker build option";;
   -c) startCluster=$2; paramInfo="$paramInfo\n  - found the cluster option: $startCluster"
   shift ;;
   -r) removeAppFolder=1; paramInfo="$paramInfo\n  - found the remove current app folder option";;
@@ -840,13 +841,13 @@ if echo $appName | grep -Po "^http" > /dev/null ; then
 elif echo $appName | grep -Po "^\/{1}|^\.{1,2}\/{1}" > /dev/null ; then # Check folder or file
   echo "Path $appName"
   if echo $appName | grep -Po "\.zip\$" > /dev/null ; then
-    if ! [ -f $appName ]; then echo "Zip file with app don't found. Check path $appName"; exit; fi
+    if ! [ -f $appName ]; then echo "Zip file with app is not found. Check path $appName"; exit; fi
     zipPath=$appName
     temp=${appName##*/}
     appName=${temp%.zip*}
   else
     echo "FOLDER $appName"
-     if ! [ -d $appName ]; then echo -en "${i_err}Folder with app don't found. Check path $appName${i_end}"; exit; fi
+     if ! [ -d $appName ]; then echo -en "${i_err}Folder with app is not found. Check path $appName${i_end}"; exit; fi
      folderPath=${appName}
      appName=${appName##*/}
   fi
@@ -859,7 +860,7 @@ else
 fi
 if [ $appGitLink ]; then
   http_code=`curl -L -s -k -w %{http_code} -o /dev/null $appGitLink`
-  if [[ $http_code != '200' ]]; then echo -en "${i_err}Check url $appGitLink is failed, code $http_code. Exit${i_end}"; exit;
+  if [[ $http_code != '200' ]]; then echo -en "${i_err}Check failed url $appGitLink, code $http_code. Exit${i_end}"; exit;
   else echo "Source. Type Git. URL $appGitLink"; fi
 fi
 
@@ -868,7 +869,7 @@ if [ $newAppName ] ; then
   prevAppName=$appName
   appName=$newAppName
 fi
-# TODO из архива зип или из папки - добавить проверку по страту и по расширению
+# TODO from zip archive or from folder - add check by stratum and by extension
 
 dbName=$appName
 dockerName="$appName"
@@ -925,13 +926,13 @@ if ! [ $quietMode ] ; then
   echo "Insalling app:          $appName"
   echo "  - workspace dir:        $installDir"
   echo "  - framework path:       $frameworkPath"
-  if [ $postInstScript ] ; then echo "  - postinstall script:   $postInstScript"; fi
+  if [ $postInstScript ] ; then echo "  - post-install script:   $postInstScript"; fi
 fi
 cd $installDir
 
 # Build
 if [ -z "$buildType" ]; then
-  echo "Build method isn't set. Use default: docker"
+  echo "Build method isn't set. Use docker by default"
   f_install_docker
 else
   case "$buildType" in

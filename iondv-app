@@ -667,6 +667,18 @@ function f_install_git () {
   f_create_init_sh
 
   cd $frameworkPath
+
+ if [ $dockerUse ]; then
+    nodeVersion=`node --version | grep -Po "^v\d+" |  grep -Po "\d+"`
+    echo "FROM node:$nodeVersion" > "$frameworkPath/Dockerfile"
+    echo "WORKDIR /var/www" >> "$frameworkPath/Dockerfile"
+    echo "EXPOSE 8888" >> "$frameworkPath/Dockerfile"
+    echo "ENV NODE_PATH /var/www" >> "$frameworkPath/Dockerfile"
+    echo "COPY . ." >> "$frameworkPath/Dockerfile"
+    if [ $startCluster ] ; then echo "ENV WORKER_COUNT $startCluster" >> "$frameworkPath/Dockerfile"; fi
+    echo "CMD [\"bash\", \"init.sh\"]" >> "$frameworkPath/Dockerfile"
+  fi
+
   if [ $postInstScript ] ; then
     if ! [ $quietMode ] ; then echo -en "${i_info}Running postinstall script $postInstScript, before building the app${i_end}"; fi
     $postInstScript
@@ -689,14 +701,14 @@ function f_install_git () {
   if [ $dockerUse ]; then
     f_stop_docker
     f_dockerignore
-    nodeVersion=`node --version | grep -Po "^v\d+" |  grep -Po "\d+"`
-    echo "FROM node:$nodeVersion" > "$frameworkPath/Dockerfile"
-    echo "WORKDIR /var/www" >> "$frameworkPath/Dockerfile"
-    echo "EXPOSE 8888" >> "$frameworkPath/Dockerfile"
-    echo "ENV NODE_PATH /var/www" >> "$frameworkPath/Dockerfile"
-    echo "COPY . ." >> "$frameworkPath/Dockerfile"
-    if [ $startCluster ] ; then echo "ENV WORKER_COUNT $startCluster" >> "$frameworkPath/Dockerfile"; fi
-    echo "CMD [\"bash\", \"init.sh\"]" >> "$frameworkPath/Dockerfile"
+#    nodeVersion=`node --version | grep -Po "^v\d+" |  grep -Po "\d+"`
+#    echo "FROM node:$nodeVersion" > "$frameworkPath/Dockerfile"
+#    echo "WORKDIR /var/www" >> "$frameworkPath/Dockerfile"
+#    echo "EXPOSE 8888" >> "$frameworkPath/Dockerfile"
+#    echo "ENV NODE_PATH /var/www" >> "$frameworkPath/Dockerfile"
+#    echo "COPY . ." >> "$frameworkPath/Dockerfile"
+#    if [ $startCluster ] ; then echo "ENV WORKER_COUNT $startCluster" >> "$frameworkPath/Dockerfile"; fi
+#    echo "CMD [\"bash\", \"init.sh\"]" >> "$frameworkPath/Dockerfile"
     f_buld_docker_version "$imageName" "$frameworkPath/Dockerfile" "$frameworkPath/." "--check-ignore"
     f_start_docker
   else

@@ -693,10 +693,10 @@ function f_install_git () {
     exit
   fi
 
-  rm -r -f ./node_modules
+#  rm -r -f ./node_modules
 
-  if ! [ $quietMode ] ; then echo 'Install npm production'; fi
-  npm ci --only=production
+#  if ! [ $quietMode ] ; then echo 'Install npm production'; fi
+#  npm ci --only=production
   echo "Test user. Login: demo, password: ion-demo"
   if [ $dockerUse ]; then
     f_stop_docker
@@ -765,20 +765,20 @@ function f_start_docker() {
   if ! [ $quietMode ] ; then docker logs $dockerName; fi
   curl localhost:8888 # TODO Check result - redirect to default from setup
   echo
-  if [ $yesToAll ] ; then
-    echo "Save docker container to file"
-    choice="y"
-  else
-    read -p "\nSave docker container to file $startDir/$dockerName.docker-image.tar (y/n)?" choice
-  fi
-  case "$choice" in
-    y|Y )
-      docker save $imageName -o $startDir/$dockerName.docker-image.tar
-      echo -en "${i_info}Save $startDir/$dockerName.docker-image.tar${i_end}"
-      ;;
-    n|N );;
-    * ) echo "invalid";;
-  esac
+#  if [ $yesToAll ] ; then
+#    echo "Save docker container to file"
+#    choice="y"
+#  else
+#    read -p "\nSave docker container to file $startDir/$dockerName.docker-image.tar (y/n)?" choice
+#  fi
+#  case "$choice" in
+#    y|Y )
+#      docker save $imageName -o $startDir/$dockerName.docker-image.tar
+#      echo -en "${i_info}Save $startDir/$dockerName.docker-image.tar${i_end}"
+#      ;;
+#    n|N );;
+#    * ) echo "invalid";;
+#  esac
 }
 
 ##################################

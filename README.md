@@ -94,6 +94,8 @@ Parameters:
                                  application. It can be used for additional processing of application files.
      -n [value]                  parameters determining the change the application's namespace to a new one, before the                                          deploy
      -h                          skip switching to version of application dependencies, installation on latest versions
+     -x                          exit without start app, after build
+
    Method Parameters for git:
      -d                          prepare a docker container based on the assembled version. Also stop and
                                  remove container, image with that name

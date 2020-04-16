@@ -39,6 +39,7 @@ if ! [ $1 ] ; then
   echo '  -s [value]                  full path to the script, run after installing and before building the app'
   echo '  -n [value]                  new app namespace and name'
   echo '  -h                          skip checkout to version in tag. Use default (last) version'
+  echo "  -x                          exit without start app, after build"
   echo 'Options for git, zip, npm method:'
   echo '  -d                          stop, remove runnig app docker container and image,'
   echo '                              build for local deploy (git build method)'
@@ -710,10 +711,10 @@ function f_install_git () {
 #    if [ $startCluster ] ; then echo "ENV WORKER_COUNT $startCluster" >> "$frameworkPath/Dockerfile"; fi
 #    echo "CMD [\"bash\", \"init.sh\"]" >> "$frameworkPath/Dockerfile"
     f_buld_docker_version "$imageName" "$frameworkPath/Dockerfile" "$frameworkPath/." "--check-ignore"
-    f_start_docker
+    if [ $skiRun -ne 1 ]; then f_start_docker; fi
   else
     # TODO Remove database?
-    bash ./init.sh
+    if [ $skiRun -ne 1 ]; then bash ./init.sh; fi
   fi
 }
 
@@ -791,7 +792,7 @@ function f_install_docker() {
   if ! [ -d $frameworkPath ]; then mkdir $frameworkPath; fi
   f_dockerignore
   f_build_docker
-  f_start_docker
+  if [ $skipRun -ne 1 ]; then f_start_docker; fi
 }
 
 ##################################
@@ -813,6 +814,7 @@ case "$1" in
   -q) quietMode=1; paramInfo="$paramInfo\n  - found the quiet data option";;
   -h) skipTagMode=1; paramInfo="$paramInfo\n  - found the skip tag checkout option";;
   -v) dockerVersionSave=1; paramInfo="$paramInfo\n  - found the save provisional docker image as template version option";;
+  -x) skipRun=1; paramInfo="$paramInfo\n  - found the exit after build, without start app option";;
   -l) mongoLink="$2"; paramInfo="$paramInfo\n  - found the docker mongo link option: $mongoLink"
   shift ;;
   -m) mongodbUri="$2"; paramInfo="$paramInfo\n  - found the mongodb option: $mongodbUri"

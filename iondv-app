@@ -141,20 +141,6 @@ function f_check_npm_dep() {
       * )   echo "invalid"; exit;;
     esac
   fi
-  echo $npmPackCheck | grep 'bower'  > /dev/null
-  if [ $? -ne 0 ]; then
-    if [ $yesToAll ] ; then
-      choice="y"
-    else
-      read -p "Error check bower. Install (y/n)?" choice
-    fi
-    case "$choice" in
-      y|Y ) npm install -g bower
-            if [ $? -ne 0 ]; then exit; fi;;
-      n|N ) echo "bower is requered"; exit;;
-      * )   echo "invalid"; exit;;
-    esac
-  fi
 }
 
 function f_check_mongo () {
@@ -366,6 +352,7 @@ function f_create_init_sh() {
   if [ $importAcl ] ; then echo "node bin/acl --d ./applications/$appName/acl"                >> "$frameworkPath/init.sh"; fi
   if [ $startCluster ] ; then
     echo "export WORKER_COUNT=$startCluster"                                                  >> "$frameworkPath/init.sh"
+    echo "export NODE_ENV=production"                                                        >> "$frameworkPath/init.sh"
     echo "exec node bin/cluster"                                                                   >> "$frameworkPath/init.sh"
   else
     echo "exec node bin/www"                                                                       >> "$frameworkPath/init.sh"
@@ -500,7 +487,7 @@ function f_build_docker() {
     fi
     #echo "LABEL new=1"                                                                        >> "$frameworkPath/Dockerfile"
     echo "ENV NODE_PATH /var/www"                                                             >> "$frameworkPath/Dockerfile"
-    echo "RUN npm install -g node-gyp gulp bower"                                             >> "$frameworkPath/Dockerfile"
+    echo "RUN npm install -g node-gyp gulp"                                             >> "$frameworkPath/Dockerfile"
     ### TODO dev only? Because otherwise the docker size is 2.6 gb after removing node-modules ??? or how to reduce? Do not cache when creating docker container ????
     echo "RUN npm install"                                                                    >> "$frameworkPath/Dockerfile" # TODO NPM install gulp
     echo "RUN gulp build"                                                                     >> "$frameworkPath/Dockerfile" # TODO удалить gulp & all devDependences
@@ -520,6 +507,7 @@ function f_build_docker() {
 #            rm -rf /var/lib/apt/lists/* && rm -fR /var/cache/apk/*"                           >> "$frameworkPath/Dockerfile"
     echo "WORKDIR /var/www"                                                                   >> "$frameworkPath/Dockerfile"
     echo "ENV NODE_PATH /var/www"                                                             >> "$frameworkPath/Dockerfile"
+    echo "ENV NODE_ENV production"                                                             >> "$frameworkPath/Dockerfile"
     echo "EXPOSE 8888"                                                                        >> "$frameworkPath/Dockerfile"
     if ! [ $skipTagMode ] ; then
       echo "LABEL version=\"$imageVersion\""                                                 >> "$frameworkPath/Dockerfile"
@@ -675,6 +663,7 @@ function f_install_git () {
     echo "WORKDIR /var/www" >> "$frameworkPath/Dockerfile"
     echo "EXPOSE 8888" >> "$frameworkPath/Dockerfile"
     echo "ENV NODE_PATH /var/www" >> "$frameworkPath/Dockerfile"
+    echo "ENV NODE_ENV production" >> "$frameworkPath/Dockerfile"
     echo "COPY . ." >> "$frameworkPath/Dockerfile"
     if [ $startCluster ] ; then echo "ENV WORKER_COUNT $startCluster" >> "$frameworkPath/Dockerfile"; fi
     echo "CMD [\"bash\", \"init.sh\"]" >> "$frameworkPath/Dockerfile"

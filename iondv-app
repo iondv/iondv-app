@@ -714,7 +714,7 @@ function f_install_git () {
 
 function f_stop_docker() {
   echo -en "${i_warn}Will stop container and remove $dockerName, remove docker image: $imageName${i_end}"
-  echo -en "${i_warn}And it will drop db: $dbName${i_end}"
+#  echo -en "${i_warn}And it will drop db: $dbName${i_end}"
   if [ $yesToAll ] ; then
     choice="y"
   else
@@ -733,7 +733,7 @@ function f_stop_docker() {
         echo -n "  Remove image:           ";  docker rmi $imageName
       else echo "  There is no image $imageName to remove";
       fi
-      echo -n "  Remove db: $dbName "; docker exec -it $mongoLink mongo $dbName --quiet --eval "db.dropDatabase();";;
+#      echo -n "  Remove db: $dbName "; docker exec -it $mongoLink mongo $dbName --quiet --eval "db.dropDatabase();";;
 
     n|N );;
     * ) echo "invalid";;

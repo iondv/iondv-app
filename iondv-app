@@ -733,8 +733,8 @@ function f_stop_docker() {
         echo -n "  Remove image:           ";  docker rmi $imageName
       else echo "  There is no image $imageName to remove";
       fi
-#      echo -n "  Remove db: $dbName "; docker exec -it $mongoLink mongo $dbName --quiet --eval "db.dropDatabase();";;
-
+#      echo -n "  Remove db: $dbName "; docker exec -it $mongoLink mongo $dbName --quiet --eval "db.dropDatabase();"
+     ;;
     n|N );;
     * ) echo "invalid";;
   esac

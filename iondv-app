@@ -217,6 +217,32 @@ function f_get_modulesdep_ver() {
   fi
 }
 
+function f_switch_branch {
+  local gitFolder=$1
+  cd $gitFolder || return 1
+  if [ -n "$gitBranch" ] ; then
+    git checkout $gitBranch > /dev/null 2>&1
+    if [ $? -eq 0 ] ; then
+      echo "checked out $gitBranch on $gitFolder"
+      return 0
+    fi
+  fi
+  if [ -n "$fallbackBranch" ] ; then
+    git checkout $fallbackBranch > /dev/null 2>&1
+    if [ $? -eq 0 ] ; then
+      echo "checked out $fallbackBranch on $gitFolder"
+      return 0
+    fi
+  fi
+  if [ -n "$2" ] ; then
+    git checkout $2 > /dev/null 2>&1
+    if [ $? -eq 0 ] ; then
+      echo "checked out $2 on $gitFolder"
+    fi
+  fi
+  return 0
+}
+
 function f_save_package_to_host () {
   docker run --rm --entrypoint="" "$1" cat "$2/package.json" > "$3"
 }
@@ -534,10 +560,11 @@ function f_build_docker() {
 # Git install function           #
 ##################################
 function f_install_git () {
+
   if ! [ -d $frameworkPath ]; then
     if ! [ $quietMode ] ; then echo "Git: clone IONDV. framework"; fi
     git clone --quiet "$IONDVUrlGitFramework" "$appName"
-    if [ $? -ne 0 ]; then echo -en "${i_err}Don't clone $IONDVUrlGitFramework${i_end}"; exit; fi
+    if [ $? -ne 0 ]; then echo -en "${i_err} Error cloning $IONDVUrlGitFramework${i_end}"; exit; fi
   else
     cd $frameworkPath
     if ! [ $quietMode ] ; then echo "Git: Stash and update IONDV. framework"; fi
@@ -562,15 +589,19 @@ function f_install_git () {
 
   if [ -n "$appGitLink" ]; then
     if [ -d "$frameworkPath/applications/$appName" ]; then
-        appVer=`grep -E '\"version\"\s*:\s*\"' $frameworkPath/applications/$appName/package.json | grep -o -E '[0-9\.]+'`
-        git stash
-        git pull
-      else
-        cd "$frameworkPath/applications"
-        if ! [ $quietMode ] ; then echo "Git: clone IONDV. app - $appName from $appGitLink"; fi
-        git clone --quiet "$appGitLink" $appName
-        if [ $? -ne 0 ]; then echo -en "${i_err}Don't clone $appGitLink${i_end}"; exit; fi
-      fi
+      cd $appName
+      appVer=`grep -E '\"version\"\s*:\s*\"' $frameworkPath/applications/$appName/package.json | grep -o -E '[0-9\.]+'`
+      git stash
+      git pull
+      f_switch_branch "$frameworkPath/applications/$appName"
+      cd ..
+    else
+      cd "$frameworkPath/applications"
+      if ! [ $quietMode ] ; then echo "Git: clone IONDV. app - $appName from $appGitLink"; fi
+      git clone --quiet "$appGitLink" $appName
+      if [ $? -ne 0 ]; then echo -en "${i_err} error cloning $appGitLink${i_end}"; exit; fi
+      f_switch_branch "$frameworkPath/applications/$appName"
+    fi
   elif [ -n "$zipPath" ]; then
      unzip -q $zipPath -d "$frameworkPath/applications/"
      unzipName=`ls -1p $frameworkPath/applications | grep '/$' | sed 's/\/$//' | grep $appName` # If zip from github - it have branch on folder name
@@ -582,6 +613,14 @@ function f_install_git () {
      fi
   elif [ -n "$folderPath" ]; then
      cp -r $folderPath "$frameworkPath/applications/$appName"
+     cd "$frameworkPath/applications/$appName"
+     if [ $? -ne 0 ] ; then echo "Error copying source folder. Exiting." ; exit ; fi
+     if [ -n "$(git status | grep -e "^On branch*" | grep -E ".+-[0-9]+" | cat)" ] ; then
+       gitBranch=$(git status | grep -e "^On branch*" | cat)
+       gitBranch=${gitBranch##On branch }
+       echo "building branch $gitBranch"
+     fi
+     cd ../..
   else
     echo -en "${i_err} App source is not found. Exit${i_end}"
     exit
@@ -607,12 +646,18 @@ function f_install_git () {
 
   # package.json dependencies
   # engines - iondv framework version
+
   if ! [ $skipTagMode ] ; then f_get_framework_ver $frameworkPath/applications/$appName/package.json; fi
   if [ $frameworkVer ]; then
     if ! [ $quietMode ] ; then echo "Use ion engine: $i"; fi
-    cd "$frameworkPath"
-    git checkout tags/$frameworkVer
-  fi
+  #  cd "$frameworkPath"
+  #  git checkout tags/$frameworkVer
+    f_switch_branch $frameworkPath "tags/$frameworkVer"
+  else
+    f_switch_branch $frameworkPath
+  fi #<------------------- IS IT STILL NEEDED?
+
+
 
   # ionMetaDependencies
   f_get_metadep_ver $frameworkPath/applications/$appName/package.json
@@ -621,12 +666,18 @@ function f_install_git () {
     if ! [ -d "$frameworkPath/applications/${temp%:*}" ]; then
       cd $frameworkPath/applications
       git clone --quiet "$IONDVUrlGitExtApp/${temp%:*}.git"
-      if [ $? -ne 0 ]; then echo -en "${i_err}Don't clone $IONDVUrlGitExtApp/${temp%:*}.git${i_end}"; exit; fi
+      if [ $? -ne 0 ]; then echo -en "${i_err} error cloning $IONDVUrlGitExtApp/${temp%:*}.git${i_end}"; exit; fi
+    else
+      cd "$frameworkPath/applications/${temp%:*}"
+      git stash
+      git pull
     fi
-    cd "$frameworkPath/applications/${temp%:*}"
-    git stash
-    git pull
-    if ! [ $skipTagMode ] ; then git checkout "tags/${temp##*:}"; fi
+    if ! [ $skipTagMode ] ; then
+      cd "$frameworkPath/applications/${temp%:*}"
+      f_switch_branch "$frameworkPath/applications/${temp%:*}" "tags/${temp##*:}"
+    else
+      f_switch_branch "$frameworkPath/applications/${temp%:*}"
+    fi
   done
 
   if ! [ -d $frameworkPath/modules ]; then
@@ -640,12 +691,18 @@ function f_install_git () {
     if ! [ -d "$frameworkPath/modules/${temp%:*}" ]; then
       cd $frameworkPath/modules
       git clone --quiet "$IONDVUrlGitModules/${temp%:*}.git"
-      if [ $? -ne 0 ]; then echo -en "${i_err}Don't clone $IONDVUrlGitModules/${temp%:*}.git${i_end}"; exit; fi
+      if [ $? -ne 0 ]; then echo -en "${i_err} error cloning $IONDVUrlGitModules/${temp%:*}.git${i_end}"; exit; fi
+    else
+      cd "$frameworkPath/modules/${temp%:*}"
+      git stash
+      git pull
     fi
-    cd "$frameworkPath/modules/${temp%:*}"
-    git stash
-    git pull
-    if ! [ $skipTagMode ] ; then git checkout "tags/${temp##*:}"; fi
+    if ! [ $skipTagMode ] ; then
+      cd "$frameworkPath/modules/${temp%:*}"
+      f_switch_branch "$frameworkPath/modules/${temp%:*}" "tags/${temp##*:}"
+    else
+      f_switch_branch "$frameworkPath/modules/${temp%:*}"
+    fi
   done
 
   if ! [ $quietMode ] ; then echo "Build IONDV application: $appName"; fi
@@ -816,6 +873,8 @@ case "$1" in
   shift ;;
   -s) postInstScript="$2"; paramInfo="$paramInfo\n  - found the script option: $postInstScript"
   shift ;;
+  -g) fallbackBranch="$2"; paramInfo="$paramInfo\n  - found the fallback branch option: $fallbackBranch"
+  shift ;;
   *)  if [[ ${1:0:1} == "-" ]] ; then 
         echo "$1 is not an option" 
         shift
@@ -825,7 +884,6 @@ case "$1" in
   esac
 shift
 done
-
 if ! [ $appName ] ; then 
   echo -en "${i_err}Application name or git url isn't set${i_end}"
   exit
@@ -841,6 +899,7 @@ if ! [ $IONDVUrlGitExtApp ] ; then IONDVUrlGitExtApp=https://github.com/iondv; f
 if echo $appName | grep -Po "^http" > /dev/null ; then
   appGitLink=$appName
   appName=`echo $appName | grep -Po "[\-\w]+\.git" | sed 's/.git//'`
+  if [ -z "$appName" ] ; then appName=${appGitLink##http*//*/} ; fi
 elif echo $appName | grep -Po "^\/{1}|^\.{1,2}\/{1}" > /dev/null ; then # Check folder or file
   echo "Path $appName"
   if echo $appName | grep -Po "\.zip\$" > /dev/null ; then
@@ -865,6 +924,14 @@ if [ $appGitLink ]; then
   http_code=`curl -L -s -k -w %{http_code} -o /dev/null $appGitLink`
   if [[ $http_code != '200' ]]; then echo -en "${i_err}Check failed url $appGitLink, code $http_code. Exit${i_end}"; exit;
   else echo "Source. Type Git. URL $appGitLink"; fi
+  if (echo $appGitLink | grep -e '/tree/' > /dev/null)
+    then
+      gitBranch=${appGitLink#*/tree/}
+      appGitLink=${appGitLink%%/tree/*}
+      echo "building branch $gitBranch from $appGitLink"
+      appName=${appGitLink#*iondv/}
+      frameworkPath="$(pwd)/${appName}"
+  fi
 fi
 
 if [ $newAppName ] ; then
@@ -918,7 +985,12 @@ if ! [ $installDir ] ; then
   echo 'Use current dir for workspace'
   installDir=$startDir
 fi
+
 frameworkPath=$installDir/$appName
+if [ "$installDir/" == $frameworkPath ] ; then
+  echo "Error: framework path can't be equal to the install directory. Exiting."
+  exit 1
+fi
 
 if [ $removeAppFolder ] ; then
   echo -en "${i_warn}Remove $frameworkPath${i_end}"

@@ -167,53 +167,507 @@ function f_get_framework_ver() {
     engines=`sed -n -r '/"engines":\s+\{/,/\}/{ /"engines":\s+\{/d; /}/d; p; }' $packagePath`
     if ! [ ${#engines[@]} = 0 ] ; then
       if ! [ $quietMode ] ; then echo "Engine list: $engines"; fi
-      enginelist=`echo $engines | tr -d [:space:] | tr -d '"' | tr ',' '\n'`
-      for i in ${enginelist[@]}
-      do
-        IFS=':' tmp=($i)
-        if [ ${tmp[0]} = "ion" ]; then
-          frameworkVer=${tmp[1]}
-        fi
-        IFS=$IFS_def
-      done
+      enginelist="$(echo "$engines" | tr ',' '\n')"
+      #`echo $engines | tr -d [:space:] | tr -d '"' | tr ',' '\n'`
+      frameworkVer=$(echo ${enginelist[*]} | grep -oE "\"ion\":[[:blank:]]\".*\"[[:blank:]]*" | cat)
+      frameworkVer=${frameworkVer%\"*}
+      #"
+      frameworkVer=${frameworkVer##*\"}
+      #for i in ${enginelist[@]}
+      #do
+      #  IFS=':' tmp=($i)
+      #  if [ ${tmp[0]} = "ion" ]; then
+      #    frameworkVer="${tmp[1]}"
+      #  fi
+      #  IFS=$IFS_def
+      #done
     fi
   fi
 }
-
 function f_get_metadep_ver() {
   appPackagePath=$1
+  metaDepPairList=()
   if grep -q '"ionMetaDependencies"\s*:\s*{' $appPackagePath && ! grep -q '"ionMetaDependencies"\s*:\s*{[\s\n]*}' $appPackagePath; then
     local metadepAll=`sed -n -r '/"ionMetaDependencies":\s+\{/,/\}/{ /"ionMetaDependencies":\s+\{/d; /}/d; p; }' $appPackagePath`
-    if ! [ $quietMode ] ; then echo -e "Addition apps list:\n$metadepAll"; fi
+    if ! [ $quietMode ] ; then echo -e "Additional apps list:\n$metadepAll"; fi
     if ! [ ${#metadepAll[@]} = 0 ] ; then
-      local rawMetaDepPairList=`echo $metadepAll | tr -d [:space:] | tr -d '"' | tr ',' '\n'`
-      for temp in ${rawMetaDepPairList[@]}; do
-        if [[ `curl -L -s -k -w %{http_code} -o /dev/null $IONDVUrlGitExtApp/${temp%:*}.git` != '200' ]]; then
-          echo "Check extra app ${temp%:*}. $IONDVUrlGitExtApp/${temp%:*} is missing. Skip"
+      local rawMetaDepPairList="$(echo -n "$metadepAll" | grep --null -oE "\"[[:alnum:]]+\":[[:blank:]]\".*\",*")"
+      local oIFS=$IFS
+      IFS=','
+      rawMetaDepPairList=($rawMetaDepPairList)
+      local name
+      local ver
+      for temp in "${rawMetaDepPairList[@]}"; do
+        echo $temp
+        temp=$(echo $temp | grep -oE "\"[[:alnum:]]+\":[[:blank:]]\".*\"[[:blank:]]*" | cat)
+        name=${temp#*\"}
+        name=${name%%\"*}
+        #"
+        ver=${temp%\"*}
+        #"
+        ver=${ver##*\"}
+        if [[ `curl -L -s -k -w %{http_code} -o /dev/null $IONDVUrlGitExtApp/$name.git` != '200' ]]; then
+          echo "Check extra app $name. $IONDVUrlGitExtApp/$name is missing. Skip"
         else
-          metaDepPairList=`echo -en "${metaDepPairList[@]}\n${temp}"`
+          metaDepPairList+=("$name:$ver")
         fi
       done
     fi
   fi
 }
 #  if grep -Eq '"ionModulesDependencies"\s*:\s*{' $frameworkPath/package.json && ! grep -Eq '"ionModulesDependencies"\s*:\s*{[\s\n]*}' $frameworkPath/package.json; then
+#'
 #    modules=`sed -n -r '/"ionModulesDependencies":\s+\{/,/\}/{ /"ionModulesDependencies":\s+\{/d; /}/d; p; }' $frameworkPath/package.json`
 function f_get_modulesdep_ver() {
   appPackagePath=$1
+  modulesDepPairList=()
   if grep -Eq '"ionModulesDependencies"\s*:\s*{' $appPackagePath && ! grep -Eq '"ionModulesDependencies"\s*:\s*{[\s\n]*}' $appPackagePath; then
     local modulesdepAll=`sed -n -r '/"ionModulesDependencies":\s+\{/,/\}/{ /"ionModulesDependencies":\s+\{/d; /}/d; p; }' $appPackagePath`
     if ! [ $quietMode ] ; then echo -e "Modules list:\n$modulesdepAll"; fi
-    if ! [ ${#modulesdepAll[@]} = 0 ] ; then
-      local rawModulesDepPairList=`echo $modulesdepAll | tr -d [:space:] | tr -d '"' | tr ',' '\n'`
-      for temp in ${rawModulesDepPairList[@]}; do
-        if [[ `curl -L -s -k -w %{http_code} -o /dev/null $IONDVUrlGitModules/${temp%:*}.git` != '200' ]]; then
-          echo "Check module ${temp%:*}. $IONDVUrlGitModules/${temp%:*} is missing. Skip"
+    if ! [ "${#modulesdepAll[@]}" = 0 ] ; then
+      local rawModulesDepPairList="$(echo -n "$modulesdepAll" | grep --null -oE "\"[[:alnum:]]+\":[[:blank:]]\".*\",*")"
+      local oIFS=$IFS
+      IFS=','
+      rawModulesDepPairList=($rawModulesDepPairList)
+      IFS=$oIFS
+      local name
+      local ver
+      for temp in "${rawModulesDepPairList[@]}"; do
+        temp=$(echo $temp | grep -oE "\"[[:alnum:]]+\":[[:blank:]]\".*\"[[:blank:]]*" | cat)
+        name=${temp#*\"}
+        name=${name%%\"*}
+        #"
+        ver=${temp%\"*}
+        #"
+        ver=${ver##*\"}
+        if [[ `curl -L -s -k -w %{http_code} -o /dev/null $IONDVUrlGitModules/$name.git` != '200' ]]; then
+          echo "Check module ${name}. $IONDVUrlGitModules/$name is missing. Skip"
         else
-           modulesDepPairList=`echo -en "${modulesDepPairList[@]}\n${temp}"`
+          modulesDepPairList+=("$name:$ver")
         fi
       done
     fi
+  else
+    modulesDepPairList='registry:*'
+  fi
+}
+
+function f_get_semver {
+  #npm versioning compatibility layer
+  if [ -n "$1" ] ; then
+
+    local vpat="$1"
+    local output_all="$2"
+    local explicit_tags="$3"
+
+    if [ -n "$vpat" ] ; then
+
+      local semver_pat
+      if [ "$vpat" == "*" ] || [ "$vpat" == "x" ] ; then
+        semver_pat='latest'
+      elif [ -n "$(echo "$vpat" | grep -oE "\|\|" | cat)" ] ; then
+        semver_pat='or'
+      elif [ -n "$(echo "$vpat" | grep -oE "\s\-\s" | cat)" ] ; then
+        semver_pat='range'
+      elif [ -n "$(echo "$vpat" | grep -oE "\s[<>]" | cat)" ] ; then
+        semver_pat='comparison range'
+        #TODO [<>] matching: check ^1 <3
+      elif [ -n "$(echo "$vpat" | grep -oE "[<>]" | cat)" ] ; then
+        semver_pat='comparison'
+      elif [ -n "$(echo "$vpat" | grep -oE "^[0-9]+\.[0-9]+\.[0-9]+" | cat)" ] ; then
+        semver_pat='exact'
+      elif [ -n "$(echo "$vpat" | grep -oE "\~[0-9]+\.[0-9]+\.[0-9x]+" | cat)" ] \
+       || [ -n "$(echo "$vpat" | grep -oE "[0-9]+\.[0-9]+\.x" | cat)" ] \
+       || [ -n "$(echo "$vpat" | grep -oE "\~[0-9]+\.[0-9]+" | cat)" ] \
+       || [ -n "$(echo "$vpat" | grep -oE "^[0-9]+\.[0-9]+" | cat)" ] ; then
+        semver_pat='minor'
+      elif [ -n "$(echo "$vpat" | grep -oE "\^[0-9]+\.[0-9x]+\.[0-9x]+" | cat)" ] \
+       || [ -n "$(echo "$vpat" | grep -oE "[0-9]+\.x\.[0-9x]+" | cat)" ] \
+       || [ -n "$(echo "$vpat" | grep -oE "[0-9]+\.x" | cat)" ] \
+       || [ -n "$(echo "$vpat" | grep -oE "\^[0-9]+\.[0-9x]+" | cat)" ] \
+       || [ -n "$(echo "$vpat" | grep -oE "\^[0-9]+" | cat)" ] \
+       || [ -n "$(echo "$vpat" | grep -oE "\~[0-9]+" | cat)" ] \
+       || [ -n "$(echo "$vpat" | grep -oE "^[0-9]+" | cat)" ] ; then
+        semver_pat='major'
+      fi
+
+      if [ -n "$semver_pat" ] ; then
+
+        local prefx
+        local maj_ver
+        local min_ver
+        local patch_ver
+        local rev
+
+        local any_found
+        local ver
+        if [ "$output_all" == "true" ] ; then
+          ver=()
+        fi
+
+        if [ "$semver_pat" == "range" ] || [ "$semver_pat" == "or" ] || [ "$semver_pat" == "comparison range" ] ; then
+
+          local part_left
+          local part_right
+          if [ "$semver_pat" == "range" ] ; then
+            part_left="${vpat%%[[:blank:]]-*}"
+            part_right="<=${vpat#*-[[:blank:]]}"
+            f_get_semver "$part_right"
+            local match_right="$v_get_semver"
+
+            if [ -n "$part_left" ] ; then
+              part_left_maj_ver="$part_left"
+              part_left_min_ver="$(echo $part_left_maj_ver | grep -oE "^[0-9]+\.[0-9]+" | cat)"
+              part_left_min_ver="${part_left_min_ver#*.}"
+              part_left_patch_ver="$(echo $part_left_maj_ver | grep -oE "^[0-9]+\.[0-9]+\.[0-9]+" | cat)"
+              part_left_patch_ver="${part_left_patch_ver##*.}"
+              part_left_maj_ver="$(echo $part_left_maj_ver | grep -oE "^[0-9]+" | cat)"
+            fi
+
+            if [ -z "$part_left_maj_ver" ] ; then part_left_maj_ver=0 ; fi
+            if [ -z "$part_left_min_ver" ] ; then part_left_min_ver=0 ; fi
+            if [ -z "$part_left_patch_ver" ] ; then part_left_patch_ver=0 ; fi
+            
+            if [ -n "$match_right" ] ; then
+              right_maj_ver="$(echo "$match_right" | grep -oE "[0-9]+\.[0-9]+\.[0-9]+")"
+              right_min_ver="$(echo $right_maj_ver | grep -oE "^[0-9]+\.[0-9]+" | cat)"
+              right_min_ver="${right_min_ver#*.}"
+              right_patch_ver="$(echo $right_maj_ver | grep -oE "^[0-9]+\.[0-9]+\.[0-9]+" | cat)"
+              right_patch_ver="${right_patch_ver##*.}"
+              right_maj_ver="$(echo $right_maj_ver | grep -oE "^[0-9]+" | cat)"
+            fi
+
+            if [ -n "$part_left" ] && [ -n "$match_right" ] ; then
+              if [ "$right_maj_ver" -gt "$part_left_maj_ver" ] \
+               || ( [ "$right_maj_ver" -eq "$part_left_maj_ver" ] && [ "$right_min_ver" -gt "$part_left_min_ver" ] ) \
+               || ( [ "$right_maj_ver" -eq "$part_left_maj_ver" ] && [ "$right_min_ver" -eq "$part_left_min_ver" ] && [ "$right_patch_ver" -ge "$part_left_patch_ver" ] ) ; then
+                any_found='true'
+                ver="$match_right"
+              fi
+            fi
+
+          elif [ "$semver_pat" == "comparison range" ] ; then
+            part_left="${vpat%%[[:blank:]]*}"
+            part_right="${vpat#*[[:blank:]]}"
+
+            f_get_semver "$part_left" true
+            local match_left="${v_get_semver[*]}"
+            if [ -n "${match_left[*]}" ] ; then
+              f_get_semver "$part_right" 'false' "${match_left[@]}"
+              local match_right="$v_get_semver"
+              if [ -n "$match_right" ] ; then
+                ver="$match_right"
+                any_found='true'
+              fi
+            fi
+
+          else
+            part_left="${vpat%%[[:blank:]]\|\|*}"
+            part_right="${vpat#*\|\|[[:blank:]]}"
+            f_get_semver "$part_left"
+            local match_left="$v_get_semver"
+            if [ -n "$match_left" ] ; then
+              any_found='true'
+              ver="$match_left"
+            else
+              f_get_semver "$part_right"
+              local match_right="$v_get_semver"
+              any_found='true'
+              ver="$match_right"
+            fi
+          fi
+
+          if [ "$any_found" == "true" ] ; then
+            v_get_semver="$ver"
+            v_pat_get_semver="$semver_pat"
+            return 0
+          else
+            v_get_semver=''
+            v_pat_get_semver=''
+            return 1
+          fi
+          exit
+        fi
+
+        if [ "$semver_pat" == "comparison" ] ; then
+          if [ -n "$(echo "$vpat" | grep -oE "<=" | cat)" ] ; then
+            semver_pat="less_equal"
+          elif [ -n "$(echo "$vpat" | grep -oE ">=" | cat)" ] ; then
+            semver_pat="greater_equal"
+          elif [ -n "$(echo "$vpat" | grep -oE "<" | cat)" ] ; then
+            semver_pat="less"
+          else
+            semver_pat="greater"
+          fi
+        fi
+
+        local avail_tags
+        if [ -z "${explicit_tags[@]}" ] ; then
+          avail_tags="$(git tag -l)"
+        else
+          avail_tags="${explicit_tags[@]}"
+        fi
+
+        local upto_maj
+        local upto_min
+        local upto_patch
+
+        if [ "$semver_pat" == "major" ] ; then
+          if [ -n "$(echo $vpat | grep -oE "\^" | cat)" ] ; then
+            maj_ver="${vpat#*^}"
+            min_ver="$(echo $maj_ver | grep -oE "^[0-9]+\.[0-9]+" | cat)"
+            min_ver="${min_ver#*.}"
+            patch_ver="$(echo $maj_ver | grep -oE "^[0-9]+\.[0-9]+\.[0-9]+" | cat)"
+            patch_ver="${patch_ver##*.}"
+            maj_ver="$(echo $maj_ver | grep -oE "^[0-9]+" | cat)"
+          elif [ -n "$(echo $vpat | grep -oE "\~" | cat)" ] ; then
+            #for compatibility reasons
+            maj_ver="${vpat#*~}"
+            min_ver="$(echo $maj_ver | grep -oE "^[0-9]+\.[0-9]+" | cat)"
+            min_ver="${min_ver#*.}"
+            patch_ver="$(echo $maj_ver | grep -oE "^[0-9]+\.[0-9]+\.[0-9]+" | cat)"
+            patch_ver="${patch_ver##*.}"
+            maj_ver="$(echo $maj_ver | grep -oE "^[0-9]+" | cat)"
+          else
+            maj_ver="$vpat"
+            min_ver="$(echo $maj_ver | grep -oE "^[0-9]+\.[0-9]+" | cat)"
+            min_ver="${min_ver#*.}"
+            patch_ver="$(echo $maj_ver | grep -oE "^[0-9]+\.[0-9]+\.[0-9]+" | cat)"
+            patch_ver="${patch_ver##*.}"
+            maj_ver="$(echo $maj_ver | grep -oE "^[0-9]+" | cat)"
+          fi
+
+        elif [ "$semver_pat" == "minor" ] ; then
+          if [ -n "$(echo $vpat | grep -oE "\~" | cat)" ] ; then
+            maj_ver="${vpat#*~}"
+            min_ver="$(echo $maj_ver | grep -oE "^[0-9]+\.[0-9]+" | cat)"
+            min_ver="${min_ver#*.}"
+            patch_ver="$(echo $maj_ver | grep -oE "^[0-9]+\.[0-9]+\.[0-9]+" | cat)"
+            patch_ver="${patch_ver##*.}"
+            maj_ver="$(echo $maj_ver | grep -oE "^[0-9]+" | cat)"
+          else
+            maj_ver="$vpat"
+            min_ver="$(echo $maj_ver | grep -oE "^[0-9]+\.[0-9]+" | cat)"
+            min_ver="${min_ver#*.}"
+            patch_ver="$(echo $maj_ver | grep -oE "^[0-9]+\.[0-9]+\.[0-9]+" | cat)"
+            patch_ver="${patch_ver##*.}"
+            maj_ver="$(echo $maj_ver | grep -oE "^[0-9]+" | cat)"
+          fi
+
+        elif [ "$semver_pat" == "greater" ] \
+         || [ "$semver_pat" == "greater_equal" ] ; then
+          if [ "$semver_pat" == "greater_equal" ] ; then
+            maj_ver="${vpat#*>=}"
+          else
+            maj_ver="${vpat#*>}"
+          fi
+          min_ver="$(echo $maj_ver | grep -oE "^[0-9]+\.[0-9]+" | cat)"
+          min_ver="${min_ver#*.}"
+          patch_ver="$(echo $maj_ver | grep -oE "^[0-9]+\.[0-9]+\.[0-9]+" | cat)"
+          patch_ver="${patch_ver##*.}"
+          maj_ver="$(echo $maj_ver | grep -oE "^[0-9]+" | cat)"
+
+        elif [ "$semver_pat" == "less" ] \
+         || [ "$semver_pat" == "less_equal" ] ; then
+          if [ "$semver_pat" == "less_equal" ] ; then
+            upto_maj="${vpat#*<=}"
+          else
+            upto_maj="${vpat#*<}"
+          fi
+          upto_min="$(echo $upto_maj | grep -oE "^[0-9]+\.[0-9]+" | cat)"
+          upto_min="${upto_min#*.}"
+          upto_patch="$(echo $upto_maj | grep -oE "^[0-9]+\.[0-9]+\.[0-9]+" | cat)"
+          upto_patch="${upto_patch##*.}"
+          upto_maj="$(echo $upto_maj | grep -oE "^[0-9]+" | cat)"
+
+        elif [ "$semver_pat" == "exact" ] ; then
+          maj_ver="$vpat"
+          min_ver="$(echo $maj_ver | grep -oE "^[0-9]+\.[0-9]+" | cat)"
+          min_ver="${min_ver#*.}"
+          patch_ver="$(echo $maj_ver | grep -oE "^[0-9]+\.[0-9]+\.[0-9]+" | cat)"
+          patch_ver="${patch_ver##*.}"
+          maj_ver="$(echo $maj_ver | grep -oE "^[0-9]+" | cat)"
+        fi
+
+        if [ -z "$maj_ver" ] ; then maj_ver=0 ; fi
+        if [ -z "$min_ver" ] ; then min_ver=0 ; fi
+        if [ -z "$patch_ver" ] ; then patch_ver=0 ; fi
+
+        for i in $avail_tags ; do
+          local tver
+          tver=$(echo $i | grep -oE "[0-9]+\.[0-9]+\.[0-9]+" | cat)
+
+          local tprefx=${i%$tver*}
+          local trev=${i#*$tver}
+          local tmaj_ver=${tver%%.*}
+          local tmin_ver=${tver#*.}
+          local tmin_ver=${tmin_ver%.*}
+          local tpatch_ver=${tver##*.}
+
+          if [ "$semver_pat" == "latest" ] ; then
+            if [ "$tmaj_ver" -gt "$maj_ver" ] \
+             || ( [ "$tmaj_ver" -eq "$maj_ver" ] && [ "$tmin_ver" -gt "$min_ver" ] ) \
+             || ( [ "$tmaj_ver" -eq "$maj_ver" ] && [ "$tmin_ver" -eq "$min_ver" ] && [ "$tpatch_ver" -gt "$patch_ver" ] ) ; then
+
+              if [ "$output_all" == 'true' ] ; then
+                ver+=("${tprefx}${tmaj_ver}.${tmin_ver}.${tpatch_ver}${trev}")
+              else
+                prefx=$tprefx
+                maj_ver=$tmaj_ver
+                min_ver=$tmin_ver
+                patch_ver=$tpatch_ver
+                rev=$trev
+              fi
+
+              any_found='true'
+            fi
+
+          elif [ "$semver_pat" == "major" ] ; then
+            if ( [ "$tmaj_ver" -eq "$maj_ver" ] && [ "$tmin_ver" -ge "$min_ver" ] ) \
+             || ( [ "$tmaj_ver" -eq "$maj_ver" ] && [ "$tmin_ver" -eq "$min_ver" ] && [ "$tpatch_ver" -ge "$patch_ver" ] ) ; then
+
+              if [ "$output_all" == 'true' ] ; then
+                ver+=("${tprefx}${tmaj_ver}.${tmin_ver}.${tpatch_ver}${trev}")
+              else
+                prefx=$tprefx
+                maj_ver=$tmaj_ver
+                min_ver=$tmin_ver
+                patch_ver=$tpatch_ver
+                rev=$trev
+              fi
+
+              any_found='true'
+            fi
+
+          elif [ "$semver_pat" == "minor" ] ; then
+             if ( [ "$tmaj_ver" -eq "$maj_ver" ] && [ "$tmin_ver" -eq "$min_ver" ] && [ "$tpatch_ver" -ge "$patch_ver" ] ) ; then
+
+              if [ "$output_all" == 'true' ] ; then
+                ver+=("${tprefx}${tmaj_ver}.${tmin_ver}.${tpatch_ver}${trev}")
+              else
+                prefx=$tprefx
+                maj_ver=$tmaj_ver
+                min_ver=$tmin_ver
+                patch_ver=$tpatch_ver
+                rev=$trev
+              fi
+
+              any_found='true'
+            fi
+
+          elif [ "$semver_pat" == "greater_equal" ] ; then
+            if [ "$tmaj_ver" -gt "$maj_ver" ] \
+             || ( [ "$tmaj_ver" -eq "$maj_ver" ] && [ "$tmin_ver" -gt "$min_ver" ] ) \
+             || ( [ "$tmaj_ver" -eq "$maj_ver" ] && [ "$tmin_ver" -eq "$min_ver" ] && [ "$tpatch_ver" -ge "$patch_ver" ] ) ; then
+
+              if [ "$output_all" == 'true' ] ; then
+                ver+=("${tprefx}${tmaj_ver}.${tmin_ver}.${tpatch_ver}${trev}")
+              else
+                prefx=$tprefx
+                maj_ver=$tmaj_ver
+                min_ver=$tmin_ver
+                patch_ver=$tpatch_ver
+                rev=$trev
+              fi
+
+              any_found='true'
+            fi
+
+          elif [ "$semver_pat" == "greater" ] ; then
+            if [ "$tmaj_ver" -gt "$maj_ver" ] \
+             || ( [ "$tmaj_ver" -eq "$maj_ver" ] && [ "$tmin_ver" -gt "$min_ver" ] ) \
+             || ( [ "$tmaj_ver" -eq "$maj_ver" ] && [ "$tmin_ver" -eq "$min_ver" ] && [ "$tpatch_ver" -gt "$patch_ver" ] ) ; then
+
+              if [ "$output_all" == 'true' ] ; then
+                ver+=("${tprefx}${tmaj_ver}.${tmin_ver}.${tpatch_ver}${trev}")
+              else
+                prefx=$tprefx
+                maj_ver=$tmaj_ver
+                min_ver=$tmin_ver
+                patch_ver=$tpatch_ver
+                rev=$trev
+              fi
+
+              any_found='true'
+            fi
+
+          elif [ "$semver_pat" == "less_equal" ] ; then
+            if ( [ -n "$upto_maj" ] && [ "$tmaj_ver" -gt "$maj_ver" ] && [ "$tmaj_ver" -lt "$upto_maj" ] ) \
+             || ( [ -n "$upto_maj" ] && [ -n "$upto_min" ] && [ "$tmaj_ver" -gt "$maj_ver" ] && [ "$tmaj_ver" -le "$upto_maj" ] && [ "$tmin_ver" -lt "$upto_min" ] ) \
+             || ( [ -n "$upto_maj" ] && [ -n "$upto_min" ] && [ -n "$upto_patch" ] && [ "$tmaj_ver" -gt "$maj_ver" ] && [ "$tmaj_ver" -le "$upto_maj" ] && [ "$tmin_ver" -le "$upto_min" ] && [ "$tpatch_ver" -le "$upto_patch" ] ) \
+             || ( [ -n "$upto_min" ] && [ "$tmaj_ver" -eq "$maj_ver" ] && [ "$tmin_ver" -gt "$min_ver" ] && [ "$tmin_ver" -lt "$upto_min" ] ) \
+             || ( [ -n "$upto_min" ] && [ -n "$upto_patch" ] && [ "$tmaj_ver" -eq "$maj_ver" ] && [ "$tmin_ver" -gt "$min_ver" ] && [ "$tmin_ver" -le "$upto_min" ] && [ "$tpatch_ver" -le "$upto_patch" ] ) \
+             || ( [ -n "$upto_patch" ] && [ "$tmaj_ver" -eq "$maj_ver" ] && [ "$tmin_ver" -eq "$min_ver" ] && [ "$tpatch_ver" -ge "$patch_ver" ] && [ "$tpatch_ver" -le "$upto_patch" ] ) ; then
+
+              if [ "$output_all" == 'true' ] ; then
+                ver+=("${tprefx}${tmaj_ver}.${tmin_ver}.${tpatch_ver}${trev}")
+              else
+                prefx=$tprefx
+                maj_ver=$tmaj_ver
+                min_ver=$tmin_ver
+                patch_ver=$tpatch_ver
+                rev=$trev
+              fi
+
+              any_found='true'
+            fi
+
+          elif [ "$semver_pat" == "less" ] ; then
+            if ( [ -n "$upto_maj" ] && [ "$tmaj_ver" -gt "$maj_ver" ] && [ "$tmaj_ver" -lt "$upto_maj" ] ) \
+             || ( [ -n "$upto_maj" ] && [ -n "$upto_min" ] && [ "$tmaj_ver" -gt "$maj_ver" ] && [ "$tmaj_ver" -le "$upto_maj" ] && [ "$tmin_ver" -lt "$upto_min" ] ) \
+             || ( [ -n "$upto_maj" ] && [ -n "$upto_min" ] && [ -n "$upto_patch" ] && [ "$tmaj_ver" -gt "$maj_ver" ] && [ "$tmaj_ver" -le "$upto_maj" ] && [ "$tmin_ver" -le "$upto_min" ] && [ "$tpatch_ver" -lt "$upto_patch" ] ) \
+             || ( [ -n "$upto_min" ] && [ "$tmaj_ver" -eq "$maj_ver" ] && [ "$tmin_ver" -gt "$min_ver" ] && [ "$tmin_ver" -lt "$upto_min" ] ) \
+             || ( [ -n "$upto_min" ] && [ -n "$upto_patch" ] && [ "$tmaj_ver" -eq "$maj_ver" ] && [ "$tmin_ver" -gt "$min_ver" ] && [ "$tmin_ver" -le "$upto_min" ] && [ "$tpatch_ver" -lt "$upto_patch" ] ) \
+             || ( [ -n "$upto_patch" ] && [ "$tmaj_ver" -eq "$maj_ver" ] && [ "$tmin_ver" -eq "$min_ver" ] && [ "$tpatch_ver" -ge "$patch_ver" ] && [ "$tpatch_ver" -lt "$upto_patch" ] ) ; then
+
+              if [ "$output_all" == 'true' ] ; then
+                ver+=("${tprefx}${tmaj_ver}.${tmin_ver}.${tpatch_ver}${trev}")
+              else
+                prefx=$tprefx
+                maj_ver=$tmaj_ver
+                min_ver=$tmin_ver
+                patch_ver=$tpatch_ver
+                rev=$trev
+              fi
+
+              any_found='true'
+            fi
+
+          elif [ "$semver_pat" == "exact" ] ; then
+             if ( [ "$tmaj_ver" -eq "$maj_ver" ] && [ "$tmin_ver" -eq "$min_ver" ] && [ "$tpatch_ver" -eq "$patch_ver" ] ) ; then
+
+              if [ "$output_all" == 'true' ] ; then
+                ver+=("${tprefx}${tmaj_ver}.${tmin_ver}.${tpatch_ver}.${trev}")
+              else
+                prefx=$tprefx
+                maj_ver=$tmaj_ver
+                min_ver=$tmin_ver
+                patch_ver=$tpatch_ver
+                rev=$trev
+              fi
+
+              any_found='true'
+              break
+            fi
+          fi
+
+        done
+
+        if [ "$any_found" == "true" ] ; then
+          if [ "$output_all" == 'true' ] ; then
+            v_get_semver="${ver[@]}"
+          else
+            ver="${prefx}${maj_ver}.${min_ver}.${patch_ver}${rev}"
+            v_get_semver="$ver"
+          fi
+          return 0
+        else
+          v_get_semver=''
+          return 1
+        fi
+      fi
+    fi
+
   fi
 }
 
@@ -235,9 +689,27 @@ function f_switch_branch {
     fi
   fi
   if [ -n "$2" ] ; then
-    git checkout $2 > /dev/null 2>&1
-    if [ $? -eq 0 ] ; then
-      echo "checked out $2 on $gitFolder"
+    local vtag="${2#tags/}"
+
+    #semantic versioning
+
+    local ver
+    f_get_semver "$vtag"
+    ver="$v_get_semver"
+    if [ -n "$ver" ] ; then
+      git checkout "tags/$ver" > /dev/null 2>&1
+      if [ $? -eq 0 ] ; then
+        echo "checked out tags/$ver on $gitFolder"
+      fi
+      return 0
+    else
+
+      #explicit versioning
+
+      git checkout $2 > /dev/null 2>&1
+      if [ $? -eq 0 ] ; then
+        echo "checked out $2 on $gitFolder"
+      fi
     fi
   fi
   return 0
@@ -589,18 +1061,23 @@ function f_install_git () {
 
   if [ -n "$appGitLink" ]; then
     if [ -d "$frameworkPath/applications/$appName" ]; then
-      cd $appName
+      cd "$frameworkPath/applications/$appName"
       appVer=`grep -E '\"version\"\s*:\s*\"' $frameworkPath/applications/$appName/package.json | grep -o -E '[0-9\.]+'`
       git stash
       git pull
       f_switch_branch "$frameworkPath/applications/$appName"
-      cd ..
+      if [ -z "$(echo $gitBranch | grep -E ".+-[0-9]+" | cat)"  ] ; then
+        gitBranch=''
+      fi
     else
       cd "$frameworkPath/applications"
       if ! [ $quietMode ] ; then echo "Git: clone IONDV. app - $appName from $appGitLink"; fi
       git clone --quiet "$appGitLink" $appName
       if [ $? -ne 0 ]; then echo -en "${i_err} error cloning $appGitLink${i_end}"; exit; fi
       f_switch_branch "$frameworkPath/applications/$appName"
+      if [ -z "$(echo $gitBranch | grep -E ".+-[0-9]+" | cat)"  ] ; then
+        gitBranch=''
+      fi
     fi
   elif [ -n "$zipPath" ]; then
      unzip -q $zipPath -d "$frameworkPath/applications/"
@@ -608,8 +1085,14 @@ function f_install_git () {
      if [ -z $unzipName ]; then echo "$zipPath no folder with this name - $appName. Exit"; exit; fi
      echo "Unpack name $unzipName, appName: $appName"
      if [ "$unzipName" != "$appName" ]; then
-       echo -en "${i_warn}Folder $unzipName not equal to $appName. Include branch name? Rename to $appName${i_end}"
+       echo -en "${i_warn}Folder $unzipName not equal to $appName. Does it include branch name? Rename to $appName${i_end}"
        mv "$frameworkPath/applications/$unzipName" "$frameworkPath/applications/$appName"
+     fi
+     cd "$frameworkPath/applications/$appName"
+     if [ -n "$(git status | grep -e "^On branch*" | grep -E ".+-[0-9]+" | cat)" ] ; then
+       gitBranch=$(git status | grep -e "^On branch*" | cat)
+       gitBranch=${gitBranch##On branch }
+       echo "building branch $gitBranch"
      fi
   elif [ -n "$folderPath" ]; then
      cp -r $folderPath "$frameworkPath/applications/$appName"
@@ -620,13 +1103,13 @@ function f_install_git () {
        gitBranch=${gitBranch##On branch }
        echo "building branch $gitBranch"
      fi
-     cd ../..
   else
     echo -en "${i_err} App source is not found. Exit${i_end}"
     exit
   fi
 
   if [ $appGetVersion ] ; then
+    cd "$frameworkPath/applications/$appName"
     git checkout "tags/$appGetVersion"
     appVer=`grep -E '\"version\"\s*:\s*\"' $frameworkPath/applications/$appName/package.json | grep -o -E '[0-9\.]+'`
     if [[ $appGetVersion != $appVer ]] ; then
@@ -648,8 +1131,8 @@ function f_install_git () {
   # engines - iondv framework version
 
   if ! [ $skipTagMode ] ; then f_get_framework_ver $frameworkPath/applications/$appName/package.json; fi
-  if [ $frameworkVer ]; then
-    if ! [ $quietMode ] ; then echo "Use ion engine: $i"; fi
+  if [ -n "$frameworkVer" ]; then
+    if ! [ $quietMode ] ; then echo "Use ion engine: $frameworkVer"; fi
   #  cd "$frameworkPath"
   #  git checkout tags/$frameworkVer
     f_switch_branch $frameworkPath "tags/$frameworkVer"
@@ -657,12 +1140,10 @@ function f_install_git () {
     f_switch_branch $frameworkPath
   fi #<------------------- IS IT STILL NEEDED?
 
-
-
   # ionMetaDependencies
   f_get_metadep_ver $frameworkPath/applications/$appName/package.json
   for temp in ${metaDepPairList[@]}; do
-    if ! [ $quietMode ] ; then echo "Inslall ext-app: ${temp%:*}"; fi
+    if ! [ $quietMode ] ; then echo "Install ext-app: ${temp%:*}"; fi
     if ! [ -d "$frameworkPath/applications/${temp%:*}" ]; then
       cd $frameworkPath/applications
       git clone --quiet "$IONDVUrlGitExtApp/${temp%:*}.git"
@@ -929,7 +1410,7 @@ if [ $appGitLink ]; then
       gitBranch=${appGitLink#*/tree/}
       appGitLink=${appGitLink%%/tree/*}
       echo "building branch $gitBranch from $appGitLink"
-      appName=${appGitLink#*iondv/}
+      appName=${appGitLink#*//*/*/}
       frameworkPath="$(pwd)/${appName}"
   fi
 fi

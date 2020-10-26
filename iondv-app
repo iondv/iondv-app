@@ -108,7 +108,7 @@ function f_check_git() {
   fi
 }
 function f_check_npm_dep() {
-  local npmPackCheck=`npm -g list node-gyp gulp bower`
+  local npmPackCheck=`npm -g list node-pre-gyp node-gyp gulp bower`
   if [ $? -ne 0 ]; then
     echo -en "${i_err}Error check npm packages list${i_end}"
     exit
@@ -1456,6 +1456,9 @@ if ! [ $skipCheck ] ; then
     f_check_git
     f_check_node
     f_check_npm_dep
+	# handy for several building tasks
+	apt-get install -y build-essential
+	#apt-get install -y g++
   fi
   f_check_mongo
   if ! [ $quietMode ] ; then echo 'Check success.'; fi
